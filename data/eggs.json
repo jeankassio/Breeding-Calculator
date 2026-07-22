@@ -1,0 +1,450 @@
+{
+ "PalEgg_Normal_01": {
+  "id": "PalEgg_Normal_01",
+  "icon": "PalEgg_Normal_01",
+  "names": {
+   "pt-BR": "Ovo Comum",
+   "en": "Common Egg"
+  }
+ },
+ "PalEgg_Normal_02": {
+  "id": "PalEgg_Normal_02",
+  "icon": "PalEgg_Normal_01",
+  "names": {
+   "pt-BR": "Ovo Comum",
+   "en": "Common Egg"
+  }
+ },
+ "PalEgg_Normal_03": {
+  "id": "PalEgg_Normal_03",
+  "icon": "PalEgg_Normal_01",
+  "names": {
+   "pt-BR": "Ovo Comum Imenso",
+   "en": "Large Common Egg"
+  }
+ },
+ "PalEgg_Normal_04": {
+  "id": "PalEgg_Normal_04",
+  "icon": "PalEgg_Normal_01",
+  "names": {
+   "pt-BR": "Ovo Comum Imenso",
+   "en": "Large Common Egg"
+  }
+ },
+ "PalEgg_Normal_05": {
+  "id": "PalEgg_Normal_05",
+  "icon": "PalEgg_Normal_01",
+  "names": {
+   "pt-BR": "Ovo Comum Colossal",
+   "en": "Huge Common Egg"
+  }
+ },
+ "PalEgg_Fire_01": {
+  "id": "PalEgg_Fire_01",
+  "icon": "PalEgg_Fire_01",
+  "names": {
+   "pt-BR": "Ovo Ardente",
+   "en": "Scorching Egg"
+  }
+ },
+ "PalEgg_Fire_02": {
+  "id": "PalEgg_Fire_02",
+  "icon": "PalEgg_Fire_01",
+  "names": {
+   "pt-BR": "Ovo Ardente",
+   "en": "Scorching Egg"
+  }
+ },
+ "PalEgg_Fire_03": {
+  "id": "PalEgg_Fire_03",
+  "icon": "PalEgg_Fire_01",
+  "names": {
+   "pt-BR": "Ovo Ardente Imenso",
+   "en": "Large Scorching Egg"
+  }
+ },
+ "PalEgg_Fire_04": {
+  "id": "PalEgg_Fire_04",
+  "icon": "PalEgg_Fire_01",
+  "names": {
+   "pt-BR": "Ovo Ardente Imenso",
+   "en": "Large Scorching Egg"
+  }
+ },
+ "PalEgg_Fire_05": {
+  "id": "PalEgg_Fire_05",
+  "icon": "PalEgg_Fire_01",
+  "names": {
+   "pt-BR": "Ovo Ardente Colossal",
+   "en": "Huge Scorching Egg"
+  }
+ },
+ "PalEgg_Water_01": {
+  "id": "PalEgg_Water_01",
+  "icon": "PalEgg_Water_01",
+  "names": {
+   "pt-BR": "Ovo Úmido",
+   "en": "Damp Egg"
+  }
+ },
+ "PalEgg_Water_02": {
+  "id": "PalEgg_Water_02",
+  "icon": "PalEgg_Water_01",
+  "names": {
+   "pt-BR": "Ovo Úmido",
+   "en": "Damp Egg"
+  }
+ },
+ "PalEgg_Water_03": {
+  "id": "PalEgg_Water_03",
+  "icon": "PalEgg_Water_01",
+  "names": {
+   "pt-BR": "Ovo Úmido Imenso",
+   "en": "Large Damp Egg"
+  }
+ },
+ "PalEgg_Water_04": {
+  "id": "PalEgg_Water_04",
+  "icon": "PalEgg_Water_01",
+  "names": {
+   "pt-BR": "Ovo Úmido Imenso",
+   "en": "Large Damp Egg"
+  }
+ },
+ "PalEgg_Water_05": {
+  "id": "PalEgg_Water_05",
+  "icon": "PalEgg_Water_01",
+  "names": {
+   "pt-BR": "Ovo Úmido Colossal",
+   "en": "Huge Damp Egg"
+  }
+ },
+ "PalEgg_Leaf_01": {
+  "id": "PalEgg_Leaf_01",
+  "icon": "PalEgg_Leaf_01",
+  "names": {
+   "pt-BR": "Ovo Verdejante",
+   "en": "Verdant Egg"
+  }
+ },
+ "PalEgg_Leaf_02": {
+  "id": "PalEgg_Leaf_02",
+  "icon": "PalEgg_Leaf_01",
+  "names": {
+   "pt-BR": "Ovo Verdejante",
+   "en": "Verdant Egg"
+  }
+ },
+ "PalEgg_Leaf_03": {
+  "id": "PalEgg_Leaf_03",
+  "icon": "PalEgg_Leaf_01",
+  "names": {
+   "pt-BR": "Ovo Verdejante Imenso",
+   "en": "Large Verdant Egg"
+  }
+ },
+ "PalEgg_Leaf_04": {
+  "id": "PalEgg_Leaf_04",
+  "icon": "PalEgg_Leaf_01",
+  "names": {
+   "pt-BR": "Ovo Verdejante Imenso",
+   "en": "Large Verdant Egg"
+  }
+ },
+ "PalEgg_Leaf_05": {
+  "id": "PalEgg_Leaf_05",
+  "icon": "PalEgg_Leaf_01",
+  "names": {
+   "pt-BR": "Ovo Verdejante Colossal",
+   "en": "Huge Verdant Egg"
+  }
+ },
+ "PalEgg_Electricity_01": {
+  "id": "PalEgg_Electricity_01",
+  "icon": "PalEgg_Electricity_01",
+  "names": {
+   "pt-BR": "Ovo Eletrizado",
+   "en": "Electric Egg"
+  }
+ },
+ "PalEgg_Electricity_02": {
+  "id": "PalEgg_Electricity_02",
+  "icon": "PalEgg_Electricity_01",
+  "names": {
+   "pt-BR": "Ovo Eletrizado",
+   "en": "Electric Egg"
+  }
+ },
+ "PalEgg_Electricity_03": {
+  "id": "PalEgg_Electricity_03",
+  "icon": "PalEgg_Electricity_01",
+  "names": {
+   "pt-BR": "Ovo Eletrizado Imenso",
+   "en": "Large Electric Egg"
+  }
+ },
+ "PalEgg_Electricity_04": {
+  "id": "PalEgg_Electricity_04",
+  "icon": "PalEgg_Electricity_01",
+  "names": {
+   "pt-BR": "Ovo Eletrizado Imenso",
+   "en": "Large Electric Egg"
+  }
+ },
+ "PalEgg_Electricity_05": {
+  "id": "PalEgg_Electricity_05",
+  "icon": "PalEgg_Electricity_01",
+  "names": {
+   "pt-BR": "Ovo Eletrizado Colossal",
+   "en": "Huge Electric Egg"
+  }
+ },
+ "PalEgg_Ice_01": {
+  "id": "PalEgg_Ice_01",
+  "icon": "PalEgg_Ice_01",
+  "names": {
+   "pt-BR": "Ovo Congelante",
+   "en": "Frozen Egg"
+  }
+ },
+ "PalEgg_Ice_02": {
+  "id": "PalEgg_Ice_02",
+  "icon": "PalEgg_Ice_01",
+  "names": {
+   "pt-BR": "Ovo Congelante",
+   "en": "Frozen Egg"
+  }
+ },
+ "PalEgg_Ice_03": {
+  "id": "PalEgg_Ice_03",
+  "icon": "PalEgg_Ice_01",
+  "names": {
+   "pt-BR": "Ovo Congelante Imenso",
+   "en": "Large Frozen Egg"
+  }
+ },
+ "PalEgg_Ice_04": {
+  "id": "PalEgg_Ice_04",
+  "icon": "PalEgg_Ice_01",
+  "names": {
+   "pt-BR": "Ovo Congelante Imenso",
+   "en": "Large Frozen Egg"
+  }
+ },
+ "PalEgg_Ice_05": {
+  "id": "PalEgg_Ice_05",
+  "icon": "PalEgg_Ice_01",
+  "names": {
+   "pt-BR": "Ovo Congelante Colossal",
+   "en": "Huge Frozen Egg"
+  }
+ },
+ "PalEgg_Earth_01": {
+  "id": "PalEgg_Earth_01",
+  "icon": "PalEgg_Earth_01",
+  "names": {
+   "pt-BR": "Ovo Rugoso",
+   "en": "Rocky Egg"
+  }
+ },
+ "PalEgg_Earth_02": {
+  "id": "PalEgg_Earth_02",
+  "icon": "PalEgg_Earth_01",
+  "names": {
+   "pt-BR": "Ovo Rugoso",
+   "en": "Rocky Egg"
+  }
+ },
+ "PalEgg_Earth_03": {
+  "id": "PalEgg_Earth_03",
+  "icon": "PalEgg_Earth_01",
+  "names": {
+   "pt-BR": "Ovo Rugoso Imenso",
+   "en": "Large Rocky Egg"
+  }
+ },
+ "PalEgg_Earth_04": {
+  "id": "PalEgg_Earth_04",
+  "icon": "PalEgg_Earth_01",
+  "names": {
+   "pt-BR": "Ovo Rugoso Imenso",
+   "en": "Large Rocky Egg"
+  }
+ },
+ "PalEgg_Earth_05": {
+  "id": "PalEgg_Earth_05",
+  "icon": "PalEgg_Earth_01",
+  "names": {
+   "pt-BR": "Ovo Rugoso Colossal",
+   "en": "Huge Rocky Egg"
+  }
+ },
+ "PalEgg_Dark_01": {
+  "id": "PalEgg_Dark_01",
+  "icon": "PalEgg_Dark_01",
+  "names": {
+   "pt-BR": "Ovo Negro",
+   "en": "Dark Egg"
+  }
+ },
+ "PalEgg_Dark_02": {
+  "id": "PalEgg_Dark_02",
+  "icon": "PalEgg_Dark_01",
+  "names": {
+   "pt-BR": "Ovo Negro",
+   "en": "Dark Egg"
+  }
+ },
+ "PalEgg_Dark_03": {
+  "id": "PalEgg_Dark_03",
+  "icon": "PalEgg_Dark_01",
+  "names": {
+   "pt-BR": "Ovo Negro Imenso",
+   "en": "Large Dark Egg"
+  }
+ },
+ "PalEgg_Dark_04": {
+  "id": "PalEgg_Dark_04",
+  "icon": "PalEgg_Dark_01",
+  "names": {
+   "pt-BR": "Ovo Negro Imenso",
+   "en": "Large Dark Egg"
+  }
+ },
+ "PalEgg_Dark_05": {
+  "id": "PalEgg_Dark_05",
+  "icon": "PalEgg_Dark_01",
+  "names": {
+   "pt-BR": "Ovo Negro Colossal",
+   "en": "Huge Dark Egg"
+  }
+ },
+ "PalEgg_Dragon_01": {
+  "id": "PalEgg_Dragon_01",
+  "icon": "PalEgg_Dragon_01",
+  "names": {
+   "pt-BR": "Ovo de Dragão",
+   "en": "Dragon Egg"
+  }
+ },
+ "PalEgg_Dragon_02": {
+  "id": "PalEgg_Dragon_02",
+  "icon": "PalEgg_Dragon_01",
+  "names": {
+   "pt-BR": "Ovo de Dragão",
+   "en": "Dragon Egg"
+  }
+ },
+ "PalEgg_Dragon_03": {
+  "id": "PalEgg_Dragon_03",
+  "icon": "PalEgg_Dragon_01",
+  "names": {
+   "pt-BR": "Ovo de Dragão Imenso",
+   "en": "Large Dragon Egg"
+  }
+ },
+ "PalEgg_Dragon_04": {
+  "id": "PalEgg_Dragon_04",
+  "icon": "PalEgg_Dragon_01",
+  "names": {
+   "pt-BR": "Ovo de Dragão Imenso",
+   "en": "Large Dragon Egg"
+  }
+ },
+ "PalEgg_Dragon_05": {
+  "id": "PalEgg_Dragon_05",
+  "icon": "PalEgg_Dragon_01",
+  "names": {
+   "pt-BR": "Ovo de Dragão Colossal",
+   "en": "Huge Dragon Egg"
+  }
+ },
+ "PalEgg_WorldTree_01": {
+  "id": "PalEgg_WorldTree_01",
+  "icon": "PalEgg_WorldTree_01",
+  "names": {
+   "pt-BR": "Ovo Sinistro",
+   "en": "Ominous Egg"
+  }
+ },
+ "PalEgg_WorldTree_02": {
+  "id": "PalEgg_WorldTree_02",
+  "icon": "PalEgg_WorldTree_01",
+  "names": {
+   "pt-BR": "Ovo Sinistro",
+   "en": "Ominous Egg"
+  }
+ },
+ "PalEgg_WorldTree_03": {
+  "id": "PalEgg_WorldTree_03",
+  "icon": "PalEgg_WorldTree_01",
+  "names": {
+   "pt-BR": "Ovo Imenso Sinistro",
+   "en": "Large Ominous Egg"
+  }
+ },
+ "PalEgg_WorldTree_04": {
+  "id": "PalEgg_WorldTree_04",
+  "icon": "PalEgg_WorldTree_01",
+  "names": {
+   "pt-BR": "Ovo Imenso Sinistro",
+   "en": "Large Ominous Egg"
+  }
+ },
+ "PalEgg_WorldTree_05": {
+  "id": "PalEgg_WorldTree_05",
+  "icon": "PalEgg_WorldTree_01",
+  "names": {
+   "pt-BR": "Ovo Colossal Sinistro",
+   "en": "Huge Ominous Egg"
+  }
+ },
+ "PalEgg_MutationPal": {
+  "id": "PalEgg_MutationPal",
+  "icon": "PalEgg_MutationPal",
+  "names": {
+   "pt-BR": "en_text",
+   "en": "Huge Mutated Egg"
+  }
+ },
+ "PalEgg_MutationPal_01": {
+  "id": "PalEgg_MutationPal_01",
+  "icon": "PalEgg_MutationPal",
+  "names": {
+   "pt-BR": "Ovo Mutante",
+   "en": "Mutated Egg"
+  }
+ },
+ "PalEgg_MutationPal_02": {
+  "id": "PalEgg_MutationPal_02",
+  "icon": "PalEgg_MutationPal",
+  "names": {
+   "pt-BR": "Ovo Mutante",
+   "en": "Mutated Egg"
+  }
+ },
+ "PalEgg_MutationPal_03": {
+  "id": "PalEgg_MutationPal_03",
+  "icon": "PalEgg_MutationPal",
+  "names": {
+   "pt-BR": "Ovo Imenso Mutante",
+   "en": "Large Mutated Egg"
+  }
+ },
+ "PalEgg_MutationPal_04": {
+  "id": "PalEgg_MutationPal_04",
+  "icon": "PalEgg_MutationPal",
+  "names": {
+   "pt-BR": "Ovo Imenso Mutante",
+   "en": "Large Mutated Egg"
+  }
+ },
+ "PalEgg_MutationPal_05": {
+  "id": "PalEgg_MutationPal_05",
+  "icon": "PalEgg_MutationPal",
+  "names": {
+   "pt-BR": "Ovo Colossal Mutante",
+   "en": "Huge Mutated Egg"
+  }
+ }
+}

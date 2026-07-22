@@ -1,0 +1,9 @@
+# cache da extração (uasset/uexp crus e JSON do UAssetGUI) — regerável
+build/
+mod-cpp/build/
+
+# dependências clonadas/geradas (ver docs/ARQUITETURA.md)
+external/
+
+__pycache__/
+*.pyc
