@@ -1,18 +1,15 @@
 # Monta mod/workshop/PalBreedCalc — a pasta que o uploader de mods do Palworld
-# publica na Steam Workshop.
+# publica na Steam Workshop. Traz a DLL (overlay ImGui, a interface principal),
+# os icones .dds e os scripts Lua.
 #
 #   powershell -ExecutionPolicy Bypass -File tools\package_workshop.ps1
 #
-# O layout espelha o do PalMiniMap (que ja e publicado): Info.json + thumbnail
-# na raiz e uma pasta por alvo da InstallRule. O tipo "Lua" instala cada alvo
-# em Mods\NativeMods\UE4SS\Mods\<PackageName>\, que e exatamente onde o mod
-# precisa ficar (dlls, icons e Scripts juntos).
-#
-# enabled.txt faz o UE4SS carregar o mod sem precisar editar o mods.txt — e o
-# que torna o pacote autossuficiente para quem instala pela Workshop.
+# Layout espelha o do PalMiniMap: Info.json + thumbnail na raiz e uma pasta por
+# alvo da InstallRule. O tipo "Lua" instala cada alvo em
+# Mods\NativeMods\UE4SS\Mods\<PackageName>\; enabled.txt dispensa o mods.txt.
 
 param(
-    [string]$Version = "v1.0.0"
+    [string]$Version = "v1.1.0"
 )
 
 $ErrorActionPreference = "Stop"
@@ -27,7 +24,6 @@ if (-not (Test-Path (Join-Path $source "icons"))) {
     throw "icones ausentes -- rode antes: python tools\extract_icons.py"
 }
 
-# limpa so o conteudo instalavel; a thumbnail e gerada por tools/make_thumbnail.py
 foreach ($folder in @("dlls", "icons", "Scripts")) {
     $target = Join-Path $out $folder
     if (Test-Path $target) { Remove-Item $target -Recurse -Force }
@@ -37,7 +33,17 @@ New-Item -ItemType Directory -Force -Path $out | Out-Null
 Copy-Item (Join-Path $source "dlls") $out -Recurse -Force
 Copy-Item (Join-Path $source "icons") $out -Recurse -Force
 Copy-Item (Join-Path $source "Scripts") $out -Recurse -Force
+# atalho e tamanho da janela; a DLL recria este arquivo se ele faltar
+Copy-Item (Join-Path $source "config.ini") $out -Force
 Set-Content -Path (Join-Path $out "enabled.txt") -Value "" -Encoding ASCII
+
+# "auto": usa a DLL (esta presente); cai na janela Lua so se ela faltar
+@"
+-- Breeding Calculator configuration (see the repo for details).
+-- hotkey here is only for the pure-Lua window; the normal (DLL) window
+-- reads its hotkey from ..\config.ini
+return { lua_ui = "auto", language = "auto", hotkey = "F6" }
+"@ | Set-Content (Join-Path $out "Scripts\uiconfig.lua") -Encoding UTF8
 
 $info = [ordered]@{
     ModName      = "Breeding Calculator"
@@ -51,7 +57,7 @@ $info = [ordered]@{
     InstallRule  = @(
         [ordered]@{
             Type    = "Lua"
-            Targets = @("./dlls", "./icons", "./Scripts", "./enabled.txt")
+            Targets = @("./dlls", "./icons", "./Scripts", "./config.ini", "./enabled.txt")
         }
     )
 }
@@ -61,8 +67,8 @@ if (-not (Test-Path (Join-Path $out "thumbnail.png"))) {
     Write-Warning "thumbnail.png ausente -- rode: python tools\make_thumbnail.py"
 }
 
-$files = (Get-ChildItem $out -Recurse -File)
+$files = Get-ChildItem $out -Recurse -File
 $size = ($files | Measure-Object Length -Sum).Sum / 1MB
 Write-Host ("`npronto: {0}" -f $out) -ForegroundColor Green
-Write-Host ("{0} arquivos, {1:N1} MB" -f $files.Count, $size)
+Write-Host ("{0} arquivos, {1:N1} MB (DLL + icones + scripts)" -f $files.Count, $size)
 Write-Host "Publique pelo gerenciador de mods do proprio Palworld apontando para essa pasta."

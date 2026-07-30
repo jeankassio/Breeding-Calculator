@@ -1,8 +1,8 @@
 // Executavel de conferencia, comparado com o Python por tools/validate_cpp.py.
 //
-//   engine_dump            todos os cruzamentos possiveis (pool x pool):
+//   engine_dump            todos os cruzamentos possiveis (species x species):
 //                          macho;femea;filhote;regra;ovo;tamanho_da_lista_do_ovo
-//   engine_dump reverse    a busca inversa, por filhote:
+//   engine_dump reverse    a busca inversa, por filhote (species):
 //                          filhote;pares;pares_unicos;pares_com_genero_fixo
 
 #include <cstdio>
@@ -15,9 +15,9 @@ namespace
     auto dump_forward(const palbreed::Engine& engine) -> void
     {
         std::printf("male;female;child;rule;egg;egg_pool\n");
-        for (const auto* male : engine.pool())
+        for (const auto* male : engine.species())
         {
-            for (const auto* female : engine.pool())
+            for (const auto* female : engine.species())
             {
                 const auto result = engine.breed(*male, *female);
                 std::printf("%s;%s;%s;%s;%s;%zu\n", male->id, female->id,
@@ -31,7 +31,7 @@ namespace
     auto dump_reverse(const palbreed::Engine& engine) -> void
     {
         std::printf("child;pairs;unique_pairs;gender_specific\n");
-        for (const auto* child : engine.pool())
+        for (const auto* child : engine.species())
         {
             const auto pairs = engine.pairs_for(*child);
             std::size_t unique_pairs = 0;

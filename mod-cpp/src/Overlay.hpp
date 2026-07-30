@@ -16,11 +16,20 @@
 //   * WndProc do jogo interceptado para alimentar o ImGui e engolir o input
 //     enquanto a janela esta aberta.
 //
+#include <cstdint>
 #include <functional>
 
 namespace palbreed
 {
     class ITextureBackend;
+
+    enum class OverlayStatus
+    {
+        NotInstalled,        // install() ainda nao rodou (ou falhou)
+        WaitingForDevice,    // hooks no lugar, esperando o primeiro Present
+        Ready,               // desenhando
+        Disabled,            // desligado depois de falhas seguidas
+    };
 
     class Overlay
     {
@@ -36,7 +45,17 @@ namespace palbreed
         auto set_visible(bool visible) -> void;
         auto visible() const -> bool;
 
+        auto status() const -> OverlayStatus;
+        // Frase pronta para o log quando o atalho nao consegue abrir a janela.
+        auto status_text() const -> const char*;
+
         // Disponivel so depois do primeiro frame (quando o swapchain aparece).
         auto textures() -> ITextureBackend*;
+
+        // Muda toda vez que um renderizador novo e criado. Quem guarda
+        // ImTextureID (a cache de icones) compara com o valor anterior e
+        // esquece o que tinha: os identificadores do renderizador antigo
+        // apontam para memoria da GPU que ja foi liberada.
+        auto renderer_generation() const -> uint32_t;
     };
 } // namespace palbreed

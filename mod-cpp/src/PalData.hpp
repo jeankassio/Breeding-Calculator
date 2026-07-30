@@ -23,7 +23,8 @@ namespace palbreed
         const char* size;           // XS..XL
         const char* egg;            // item de ovo gerado por esta especie
         int male_probability;
-        bool in_pool;               // pode ser resultado de um cruzamento
+        bool in_pool;               // pode ser resultado de um cruzamento de rank
+        bool selectable;            // pode ser escolhido como pai (inclui lendarias)
     };
 
     struct UniqueCombo

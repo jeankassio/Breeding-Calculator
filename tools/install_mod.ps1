@@ -27,14 +27,15 @@ if ($Uninstall) {
     exit 0
 }
 
+# Instala a DLL + icones + scripts. O jogo trava o main.dll enquanto roda,
+# entao feche-o antes.
 if (-not (Test-Path (Join-Path $source "dlls\main.dll"))) {
     throw "main.dll nao existe -- rode antes: powershell -File mod-cpp\build.ps1"
 }
-
-# O jogo trava o main.dll enquanto roda
 $running = Get-Process -Name "Palworld-Win64-Shipping" -ErrorAction SilentlyContinue
 if ($running) { throw "feche o Palworld antes de instalar (o main.dll fica em uso)" }
 
+if (Test-Path $target) { Remove-Item $target -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $target | Out-Null
 Copy-Item (Join-Path $source "*") $target -Recurse -Force
 Write-Host "copiado para $target"

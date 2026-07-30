@@ -15,6 +15,7 @@ mod-cpp/src/
   Ui.cpp            a janela (só apresentação)
   Breeding.cpp      a regra de reprodução (sem I/O, sem UI)
   Textures.cpp      leitura dos .dds + cache (comum às duas APIs)
+  Config.cpp        config.ini do usuário (atalho e tamanho da janela)
   Language.cpp      idioma do jogo, para escolher os nomes
   PalData.gen.cpp   dados extraídos do pak (gerado)
 ```
@@ -96,6 +97,27 @@ filhote o mesmo despejo de 69.169 cruzamentos que já é comparado com o Python 
 confere contagem total, quantos vêm de combinação única e quantos dependem do
 gênero.
 
+## Espécies selecionáveis × pool de resultados
+
+`IgnoreCombi` (em `DT_PalMonsterParameter`) marca as lendárias/especiais
+(Lyleen, Jetragon, Frostallion, ...): elas **nunca saem de um cruzamento de
+rank**, mas continuam sendo pais válidos e se auto-cruzam. Por isso o motor tem
+dois conjuntos, não um:
+
+- `species` (290) — uma linha canônica por tribo, incluindo as `IgnoreCombi`
+  capturáveis (zukan > 0, não-alfa). É a lista da UI e o conjunto de pais da
+  busca reversa. **Todo Pal capturável é selecionável.**
+- `pool` (263) — `species` menos as `IgnoreCombi`. É o alvo da busca por
+  `CombiRank` (regra 3) e a base das listas de ovo.
+
+A regra 2 (mesma espécie → a própria espécie) é o que faz as lendárias
+nascerem: a maioria também tem uma linha self em `DT_PalCombiUnique` (pega pela
+regra 1), mas as mais novas (Panthalus, Astralym) não têm, e a regra 2 as
+cobre. Sem separar os dois conjuntos, Lyleen sumia da lista (o bug relatado):
+o pool antigo servia de lista *e* de resultado ao mesmo tempo e excluía tudo
+que era `IgnoreCombi`. O flag `selectable` é pré-calculado por
+`gen_cpp_data.py` (o C++ não recomputa nada em runtime).
+
 ## Três implementações da mesma regra
 
 `tools/breeding.py` (referência), `mod/PalBreedCalc/Scripts/breeding.lua` e
@@ -116,6 +138,129 @@ idioma segue o idioma do app na Steam. Então `Language.cpp` lê
 localizado a partir do caminho do executável, e cai no idioma da interface do
 Windows quando o manifesto não existe (Game Pass, atalho fora da Steam).
 
+## Estabilidade do overlay (relatos de crash e de "o F6 parou")
+
+Depois dos relatos de crash ao abrir e de a tecla parar de responder, a revisão
+achou seis defeitos que explicam os dois sintomas. Todos estão corrigidos:
+
+1. **Corrida na instalação do hook** (crash no início). `install()` trocava a
+   entrada `Present` na vtable e **só depois** guardava o ponteiro original. O
+   jogo apresenta 60–144 quadros por segundo: um `Present` caindo nessa janela
+   de microssegundos lia `original_present == nullptr` e pulava para o
+   endereço zero. Pior: se `VirtualProtect` falhasse, a vtable já estava
+   trocada e o original nunca era guardado — crash garantido no quadro
+   seguinte. Agora os originais são lidos e publicados **antes** da troca, e
+   uma falha desfaz o que já tinha sido feito.
+2. **`catch (...)` não pegava nada** (crash virava fechamento do jogo). O
+   projeto compila com `/EHsc`, em que violação de acesso é exceção do Windows
+   (SEH) e **não** é capturada por `catch (...)`. O `try` em volta do frame
+   dava uma falsa sensação de rede de proteção. O guarda de verdade agora é um
+   `__try/__except` (`draw_frame_guarded`).
+3. **`give_up` era definitivo e silencioso** (o "F6 não fecha mais"). Qualquer
+   falha, mesmo passageira, marcava o overlay como morto para sempre — sem
+   log. A tecla continuava alternando um booleano que ninguém mais lia, então
+   parecia que a tecla tinha morrido. Agora são precisas três falhas seguidas
+   para desligar, e o atalho diz no log por que a janela não apareceu
+   (`Overlay::status_text`).
+4. **Input engolido por um overlay morto** (jogo "travado"). O `WndProc`
+   devolvia 0 para teclado e mouse sempre que `visible` estava ligado — mesmo
+   com o overlay já desligado. O jogador ficava sem controle nenhum. A captura
+   agora exige um renderizador vivo. E `WM_INPUT` passa pelo `DefWindowProc`
+   mesmo quando engolido: é ele quem libera o buffer de raw input, e devolver
+   0 direto vazava a cada movimento do mouse.
+5. **DX12: alocador reciclado com a GPU ainda usando** (device removido). A
+   espera pela fence tinha timeout (200 ms no frame, 2 s no envio de textura) e
+   o código seguia em frente **mesmo quando o timeout estourava**, resetando um
+   `ID3D12CommandAllocator` com comandos em voo. Agora a fence é conferida
+   depois da espera: o frame é pulado, e o envio de texturas se desliga.
+6. **DX12: referências de back buffer vazando.** `create_render_targets` era
+   chamada de novo quando só *um* dos buffers faltava, e sobrescrevia os
+   outros sem soltar a referência anterior. Back buffers presos fazem o
+   `ResizeBuffers` do jogo falhar — tela preta ou crash no alt-tab e na troca
+   de resolução. Agora solta antes de sobrescrever.
+
+Fora isso, dois cintos extras: `uninstall()` espera as threads saírem dos hooks
+antes de devolver as vtables (senão um `Present` em voo volta para dentro de
+uma DLL já descarregada), e um `.dds` truncado é recusado em vez de virar
+leitura fora dos limites dentro do `Present` — download incompleto dos ícones
+era crash certo.
+
+E três correções anteriores, de peso ao abrir:
+
+1. **Peso ao abrir**: as listas mostram 263 Pals e cada ícone era lido do disco
+   e enviado à GPU no mesmo `Present` (em DX12, cada um esperando uma fence).
+   Agora `TextureCache` tem orçamento de 8 carregamentos por frame — a janela
+   abre instantânea e os ícones aparecem ao longo de ~1 s.
+2. **Corrida de threads**: o `WndProc` (thread da janela) alimentava o ImGui
+   enquanto a thread de render usava o mesmo contexto. Agora o `WndProc` só
+   enfileira mensagens; elas são reaplicadas dentro do `Present`, na thread
+   certa.
+3. **Cintos de segurança**: exceção durante o frame desliga o overlay em vez de
+   derrubar o jogo; `ResizeBuffers` no DX12 espera a GPU esvaziar antes de
+   soltar os back buffers; `WndProc` original nulo cai em `DefWindowProc`;
+   Esc fecha a janela.
+
+## O atalho, e por que ele podia se anular
+
+O UE4SS **não lê o teclado pelo `WndProc`**: `Win32AsyncInputSource` faz polling
+com `GetAsyncKeyState` a cada 5 ms, numa thread própria. Isso é o que garante
+que engolir `WM_KEYDOWN` no hook do overlay não cega o atalho — a suspeita
+óbvia, e que se mostrou falsa.
+
+O risco real é outro: `Handler::register_keydown_event` **acrescenta** o
+callback a uma lista, e `unregister_keydown_events_for_lua_mod` só desfaz isso
+para mods Lua — os eventos de mod C++ nunca são desregistrados. Se o mod for
+construído duas vezes (hot reload do UE4SS), o F6 chama `toggle()` duas vezes no
+mesmo toque e a janela abre e fecha no mesmo quadro: tecla aparentemente morta.
+Por isso `Overlay::toggle()` ignora chamadas a menos de 200 ms uma da outra.
+
+A tecla vem de `config.ini` (`Config.cpp`), guardada como código virtual do
+Windows — que é exatamente o valor do enum `RC::Input::Key`, então a conversão
+é um cast. Modificadores precisam ir na *inscrição*, não numa conferência
+dentro do callback: o `Handler` só dispara quando
+`key_data.required_modifier_keys == event.modifier_keys`, ou seja, um atalho
+registrado sem modificador **não dispara** com Ctrl pressionado.
+
+Isso obrigou a definir `HAS_INPUT` no CMake do mod: sem ele `Input::Handler` não
+existe nos headers e a sobrecarga com modificadores nem é declarada. A
+`UE4SS.dll` instalada foi compilada com esse define (`xmake.lua`), então o mod
+passa a enxergar as mesmas declarações que a DLL exporta.
+
+Uma segunda causa de lentidão ao abrir (relatada depois): as duas listas de
+~290 espécies desenhavam **todas** as linhas por frame e cada uma pedia seu
+ícone, enfileirando ~580 carregamentos que o orçamento de 8-16/frame espalhava
+por dezenas de frames — a janela levava ~2 s "até ficar pronta". A correção é
+um `ImGuiListClipper`: só as ~10 linhas visíveis de cada lista são desenhadas e
+só elas pedem ícone, então a tela visível enche em 1-2 frames e o custo por
+frame deixa de crescer com o tamanho da lista.
+
+## Duas interfaces, um motor
+
+A interface principal — e a de todas as distribuições — é o overlay ImGui da
+DLL. Existe uma **segunda interface** para o mesmo motor Lua, `ui_umg.lua`, que
+constrói a janela com widgets UMG do próprio jogo via reflexão
+(`StaticConstructObject`, `WidgetBlueprintLibrary.Create`, `AddChild`...), sem
+hook nenhum. Ela nasceu quando o Nexus recusou upload com DLL; o Nexus depois
+voltou atrás (após ver o GitHub), então a DLL voltou a todas as distribuições e
+a janela Lua ficou como **fallback automático**: `uiconfig.lua` com
+`lua_ui = "auto"` usa a DLL quando `dlls/main.dll` está presente (sempre, nos
+pacotes) e cai na Lua só se a DLL não carregar. `main.lua` só registra o F6 da
+janela Lua quando a DLL está ausente, então nunca há F6 duplicado.
+
+Como o Lua do UE4SS não liga delegates de Blueprint, a interação da janela Lua
+usa widgets que o Slate opera sozinho, mais um truque que dá linhas clicáveis
+de verdade: `CheckBox` é um `ContentWidget`, então **cada linha de lista é um
+CheckBox contendo ícone+nome** — clicar em qualquer ponto da linha alterna um
+estado que fica gravado no widget, e um laço de poll (`LoopAsync` →
+`ExecuteInGameThread`, 150 ms) lê sem perder cliques, desmarcando as demais
+para virar seleção única. `EditableTextBox` filtra (o poll só alterna a
+visibilidade das 263 linhas fixas) e `ScrollBox` rola nativamente. Ícones vêm
+de `LoadAsset` nos assets do jogo (caminhos embutidos no `data.lua`), com
+retentativa — `LoadAsset` pode falhar no menu inicial e passar a funcionar
+dentro do mundo, então a falha nunca é definitiva. `tools/test_ui_umg.py` roda
+a janela inteira fora do jogo contra um mock da API do UE4SS (18 checks,
+incluindo clique, seleção exclusiva, filtro e o clique-no-par do modo reverso).
+
 ## Empacotamento para a Workshop
 
 `mod/PalBreedCalc` é a cópia para instalar na mão (habilitada via `mods.txt`).
@@ -126,6 +271,24 @@ uma pasta por alvo. Os tipos aceitos (extraídos do executável) são
 cada alvo em `Mods\NativeMods\UE4SS\Mods\<PackageName>\` — foi assim que o
 PalMiniMap instalou seu `Scripts/`. O `enabled.txt` faz o UE4SS carregar o mod
 sem editar o `mods.txt`, o que deixa o pacote autossuficiente.
+
+## Onde a janela abre, e por que ela tem um piso
+
+A janela abre encostada no topo e centralizada, com a altura pedida em
+`config.ini` (60% da tela). Só que porcentagem pura regride em tela pequena: em
+1920×1080, 60% dão 648 px — **menos** que os 860 px fixos de antes, e a aba
+*Parents → Child* perde a grade de filhotes. Então a porcentagem tem um piso de
+1080×860 (limitado a 92% da tela, para caber em 720p). Em 1440p e 4K a
+porcentagem é que manda e a janela cresce junto.
+
+`ImGuiCond_FirstUseEver` faz posição e tamanho valerem só até o jogador mover ou
+redimensionar; a partir daí a escolha dele vale pelo resto da sessão (não há
+`imgui.ini`, então "sessão" é até fechar o jogo).
+
+O layout da aba de ida também deixou de ser fixo: a grade de filhotes perde
+linhas (3 → 1) antes de qualquer coisa ser cortada pela borda, e abaixo de
+`ícone + linha de texto` ela desiste das legendas e mostra só os ícones — o
+tooltip continua dizendo quem é cada um.
 
 ## Iterar no visual sem abrir o jogo
 

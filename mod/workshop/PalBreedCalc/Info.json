@@ -2,7 +2,7 @@
     "ModName":  "Breeding Calculator",
     "PackageName":  "PalBreedCalc",
     "Thumbnail":  "thumbnail.png",
-    "Version":  "v1.0.0",
+    "Version":  "v1.2.0",
     "MinRevision":  82182,
     "Author":  "Jean Kassio",
     "Dependencies":  [
@@ -19,6 +19,7 @@
                                             "./dlls",
                                             "./icons",
                                             "./Scripts",
+                                            "./config.ini",
                                             "./enabled.txt"
                                         ]
                         }

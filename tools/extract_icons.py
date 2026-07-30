@@ -21,6 +21,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 BUILD = ROOT / "build"
+# A distribuicao com DLL (Steam/Workshop) consome estes .dds. A janela Lua
+# (Nexus/Game Pass) carrega os icones direto dos assets do jogo e ignora esta
+# pasta -- os empacotadores Lua nao a copiam.
 ICONS_OUT = ROOT / "mod" / "PalBreedCalc" / "icons"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))

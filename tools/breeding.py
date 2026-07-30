@@ -4,9 +4,18 @@ Motor de reproducao — implementacao de referencia (Python).
 Espelha o que o jogo faz em UPalCombiMonsterParameter::FindChildCharacterID:
   1. combinacao unica (DT_PalCombiUnique) tem prioridade, em qualquer ordem
      de pais e respeitando o genero quando a linha exige um;
-  2. senao, rank alvo = floor((rankA + rankB + 1) / 2) e escolhe-se o Pal com
+  2. mesma tribo x mesma tribo -> a propria tribo (auto-cruzamento). E o unico
+     jeito de obter as lendarias/especiais, que tem IgnoreCombi=true e por isso
+     nunca saem de um cruzamento de rank;
+  3. senao, rank alvo = floor((rankA + rankB + 1) / 2) e escolhe-se o Pal com
      o CombiRank mais proximo (UPalDatabaseCharacterParameter::FindNearestCombiRank),
      desempatando pelo menor CombiDuplicatePriority.
+
+Dois conjuntos:
+  * species: tudo que pode ser escolhido como PAI (inclui as IgnoreCombi, que
+    sao criaveis por auto-cruzamento) -- e a lista da UI;
+  * pool: os resultados possiveis de um cruzamento de rank (species menos as
+    IgnoreCombi).
 
 O mod em Lua repete exatamente esta logica; este arquivo e a referencia usada
 pelos testes e pode ser usado direto na linha de comando:
@@ -66,6 +75,10 @@ class Breeding:
         # linhas para a mesma especie — alfa "BOSS_", variantes de quest etc.,
         # todas com o mesmo CombiRank; so a especie normal pode nascer).
         self.pool = self._build_pool()
+        # Lista de escolha (pais): o pool + as especies IgnoreCombi (lendarias
+        # e afins), que so nascem de auto-cruzamento mas sao pais validos.
+        self.species = self._build_species()
+        self.species_by_tribe = {p.tribe: p for p in self.species}
 
         # combinacoes unicas indexadas pelo par de tribos (sem ordem)
         self.unique: dict[frozenset, list[dict]] = {}
@@ -78,18 +91,32 @@ class Breeding:
             if p.egg:
                 self.by_egg.setdefault(p.egg, []).append(p)
 
+    @staticmethod
+    def _rank_row(p: Pal) -> tuple:
+        # a linha "canonica" da especie: id igual ao nome da tribo;
+        # senao a que aparece no Paldex; alfa e ultimo recurso.
+        return (p.id.lower() != p.tribe.lower(), p.is_boss, -(p.zukan or -1))
+
     def _build_pool(self) -> list[Pal]:
         by_tribe: dict[str, list[Pal]] = {}
         for p in self.pals.values():
             if not p.ignore_combi:
                 by_tribe.setdefault(p.tribe, []).append(p)
+        return [sorted(rows, key=self._rank_row)[0] for rows in by_tribe.values()]
 
-        def rank_row(p: Pal) -> tuple:
-            # a linha "canonica" da especie: id igual ao nome da tribo;
-            # senao a que aparece no Paldex; alfa e ultimo recurso.
-            return (p.id.lower() != p.tribe.lower(), p.is_boss, -(p.zukan or -1))
-
-        return [sorted(rows, key=rank_row)[0] for rows in by_tribe.values()]
+    def _build_species(self) -> list[Pal]:
+        species = list(self.pool)
+        pool_tribes = {p.tribe for p in self.pool}
+        by_tribe: dict[str, list[Pal]] = {}
+        for p in self.pals.values():
+            if p.tribe and p.tribe not in pool_tribes:
+                by_tribe.setdefault(p.tribe, []).append(p)
+        for rows in by_tribe.values():
+            best = sorted(rows, key=self._rank_row)[0]
+            # so especies capturaveis de verdade (numero no Paldex, nao-alfa)
+            if best.zukan and best.zukan > 0 and not best.is_boss:
+                species.append(best)
+        return species
 
     # ---------------------------------------------------------------- regras
     def unique_child(self, a: Pal, b: Pal, gender_a: str, gender_b: str) -> str | None:
@@ -116,8 +143,13 @@ class Breeding:
         rule = "unique"
         if child_id is None:
             rule = "rank"
-            target = (pa.combi_rank + pb.combi_rank + 1) // 2
-            child_id = self.nearest(target).id
+            if pa.tribe == pb.tribe and pa.tribe in self.species_by_tribe:
+                # mesma especie sempre gera ela mesma -- regra do jogo e o unico
+                # caminho para as IgnoreCombi/lendarias (fora do pool de rank)
+                child_id = self.species_by_tribe[pa.tribe].id
+            else:
+                target = (pa.combi_rank + pb.combi_rank + 1) // 2
+                child_id = self.nearest(target).id
         child = self.pals[child_id]
         egg = child.egg
         return {

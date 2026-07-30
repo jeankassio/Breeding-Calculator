@@ -10,6 +10,7 @@
 //
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include "PalData.hpp"
@@ -58,10 +59,17 @@ namespace palbreed
         // Caminho inverso: todos os pares que geram este filhote.
         auto pairs_for(const PalInfo& child) const -> std::vector<ParentPair>;
 
-        // Especies que podem ser escolhidas/resultar (uma por tribo).
+        // Resultados possiveis de um cruzamento de rank (exclui IgnoreCombi).
         auto pool() const -> const std::vector<const PalInfo*>&
         {
             return m_pool;
+        }
+
+        // Especies selecionaveis como pai/mae: o pool + as IgnoreCombi
+        // (lendarias), que so nascem de auto-cruzamento. E a lista da UI.
+        auto species() const -> const std::vector<const PalInfo*>&
+        {
+            return m_species;
         }
 
         auto find(std::string_view id) const -> const PalInfo*;
@@ -75,6 +83,9 @@ namespace palbreed
         auto nearest(int target_rank) const -> const PalInfo*;
 
         std::vector<const PalInfo*> m_pool{};
+        std::vector<const PalInfo*> m_species{};
+        // tribo -> especie canonica (auto-cruzamento gera ela mesma)
+        std::unordered_map<std::string_view, const PalInfo*> m_species_by_tribe{};
         // rank alvo -> filhote. A regra 2 so depende do rank, entao a resposta
         // cabe numa tabela e a busca reversa fica O(1) por par.
         std::vector<const PalInfo*> m_by_rank{};

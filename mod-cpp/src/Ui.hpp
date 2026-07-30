@@ -6,6 +6,7 @@
 //   Parents -> Child   escolhe pai e mae, mostra o ovo e o filhote
 //   Child -> Parents   escolhe o filhote, mostra os pares que o geram
 //
+#include <cstdint>
 #include <vector>
 
 #include "Breeding.hpp"
@@ -20,7 +21,12 @@ namespace palbreed
 
         // Chamado dentro do frame do ImGui (ver Overlay). O backend cria as
         // texturas dos icones na primeira vez (DX11 ou DX12).
-        auto render(bool* open, ITextureBackend* textures, const char* icons_dir = nullptr) -> void;
+        //
+        // renderer_generation muda quando o overlay troca de renderizador; e o
+        // sinal para jogar fora os ImTextureID antigos, que apontam para
+        // recursos de GPU ja liberados.
+        auto render(bool* open, ITextureBackend* textures, const char* icons_dir = nullptr,
+                    uint32_t renderer_generation = 0) -> void;
         auto shutdown() -> void;
 
         // Pre-selecao usada pelo preview fora do jogo.
@@ -42,6 +48,7 @@ namespace palbreed
         const Engine& m_engine;
         TextureCache m_textures{};
         bool m_textures_ready{};
+        uint32_t m_renderer_generation{};
         bool m_style_applied{};
         std::size_t m_egg_pool_size{};   // quantos filhotes a grade precisa mostrar
 
@@ -52,6 +59,7 @@ namespace palbreed
 
         const PalInfo* m_child{};
         char m_child_filter[64]{};
+        std::vector<const PalInfo*> m_filtered{};   // scratch por frame p/ o clipper
         // 0 = nenhuma, 1 = "Parents -> Child", 2 = "Child -> Parents": clicar
         // num par salta para a outra aba
         int m_pending_tab{};

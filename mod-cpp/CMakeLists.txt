@@ -21,6 +21,7 @@ endif()
 add_library(PalBreedCalc SHARED
     src/main.cpp
     src/Log.cpp
+    src/Config.cpp
     src/Language.cpp
     src/Breeding.cpp
     src/PalData.gen.cpp
@@ -64,6 +65,10 @@ target_compile_definitions(PalBreedCalc PRIVATE
     NOMINMAX WIN32_LEAN_AND_MEAN
     # o fmt do UE4SS e compilado dentro da DLL dele; aqui usamos header-only
     FMT_HEADER_ONLY
+    # a UE4SS.dll instalada foi compilada com HAS_INPUT (xmake.lua): sem o
+    # mesmo define, Input::Handler nao existe aqui e a inscricao de atalho
+    # com Ctrl/Alt/Shift nem sequer e declarada
+    HAS_INPUT
     _SILENCE_ALL_CXX17_DEPRECATION_WARNINGS
 )
 
@@ -80,7 +85,7 @@ target_compile_options(engine_dump PRIVATE /EHsc /utf-8)
 add_executable(preview
     tests/preview.cpp
     src/Ui.cpp src/Textures.cpp src/RendererD3D11.cpp src/Log.cpp src/Language.cpp
-    src/Breeding.cpp src/PalData.gen.cpp
+    src/Config.cpp src/Breeding.cpp src/PalData.gen.cpp
     "${IMGUI_DIR}/imgui.cpp"
     "${IMGUI_DIR}/imgui_draw.cpp"
     "${IMGUI_DIR}/imgui_tables.cpp"
@@ -107,7 +112,8 @@ target_compile_definitions(preview PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_
                                            PALBREED_STANDALONE)
 target_compile_options(preview PRIVATE /EHsc /utf-8)
 
-# O UE4SS carrega Mods/<nome>/dlls/main.dll
+# O UE4SS carrega Mods/<nome>/dlls/main.dll. A DLL e a interface principal
+# (Steam); Nexus e Game Pass usam a janela Lua (ui_umg.lua).
 set_target_properties(PalBreedCalc PROPERTIES
     OUTPUT_NAME "main"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../mod/PalBreedCalc/dlls"

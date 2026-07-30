@@ -1,0 +1,18 @@
+-- Configuracao do mod.
+--
+-- lua_ui: qual interface responde ao F6.
+--   "auto"  -- usa o overlay da DLL (dlls/main.dll) quando ela esta presente
+--           -- (padrao de todas as distribuicoes: todas trazem a DLL), e cai
+--           -- na janela Lua/UMG so se a DLL faltar
+--   false   -- forca a DLL (nao registra F6 no Lua)
+--   true    -- forca a janela Lua, mesmo com a DLL instalada
+--
+-- language: idioma dos nomes de Pal/ovo.
+--   "auto"  -- segue o idioma do jogo na Steam; sem Steam (Game Pass), ingles
+--   "pt-BR" -- forca portugues
+--   "en"    -- forca ingles
+--
+-- hotkey: tecla que abre a janela Lua ("F6", "F7", "H", "INSERT", ...).
+--   So vale para a janela Lua. A janela da DLL (a normal) le o atalho de
+--   ../config.ini -- mude nos dois se usar as duas.
+return { lua_ui = "auto", language = "auto", hotkey = "F6" }

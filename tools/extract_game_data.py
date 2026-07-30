@@ -290,10 +290,44 @@ def lua_value(v) -> str:
     return '"' + str(v).replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
+def icon_paths() -> tuple[dict, dict]:
+    """Caminhos de asset dos icones ({chave minuscula: /Game/....Nome}), lidos
+    dos JSONs que tools/extract_icons.py deixa em build/json. Opcionais: sem
+    eles o data.lua sai sem icones e a UI Lua mostra so texto."""
+    out = []
+    for name in ("DT_PalCharacterIconDataTable", "DT_ItemIconDataTable"):
+        table = {}
+        path = BUILD / "json" / f"{name}.json"
+        if path.exists():
+            for row in load_json(path)["Exports"][0]["Table"]["Data"]:
+                for prop in row["Value"]:
+                    value = prop.get("Value")
+                    if isinstance(value, dict) and "AssetPath" in value:
+                        package = value["AssetPath"].get("PackageName")
+                        asset = value["AssetPath"].get("AssetName")
+                        if package and asset:
+                            table[row["Name"].lower()] = f"{package}.{asset}"
+        out.append(table)
+    return out[0], out[1]
+
+
+def pal_icon(pal: dict, table: dict) -> str | None:
+    """Mesma regra de fallback de extract_icons.icon_candidates."""
+    names = [pal["id"], pal["tribe"] or ""]
+    for name in list(names):
+        if "_" in name:
+            names.append(name.rsplit("_", 1)[0])
+    for name in names:
+        if path := table.get(name.lower()):
+            return path
+    return None
+
+
 def write_lua(path: Path, pals: list[dict], eggs: dict, unique: list[dict]) -> None:
     """Base embutida no mod: serve de fallback e traz os nomes traduzidos
     (o mod le CombiRank e companhia direto do jogo, mas os nomes vem daqui)."""
     lang = LANGS[0]
+    pal_icons, item_icons = icon_paths()
     out = ["-- GERADO POR tools/extract_game_data.py -- NAO EDITE A MAO",
            f"-- idioma: {lang}",
            "return {", "  pals = {"]
@@ -305,6 +339,7 @@ def write_lua(path: Path, pals: list[dict], eggs: dict, unique: list[dict]) -> N
             "ignore_combi": p["ignore_combi"], "male_probability": p["male_probability"],
             "element1": p["element1"], "element2": p["element2"], "size": p["size"],
             "rarity": p["rarity"], "is_boss": p["is_boss"], "egg": p["egg"],
+            "icon_asset": pal_icon(p, pal_icons),
         }
         body = ", ".join(f"{k} = {lua_value(v)}" for k, v in fields.items())
         out.append(f'    [{lua_value(p["id"])}] = {{ {body} }},')
@@ -312,7 +347,8 @@ def write_lua(path: Path, pals: list[dict], eggs: dict, unique: list[dict]) -> N
     for egg in eggs.values():
         body = ", ".join(f"{k} = {lua_value(v)}" for k, v in
                          (("id", egg["id"]), ("icon", egg["icon"]),
-                          ("name", egg["names"][lang]), ("name_en", egg["names"]["en"])))
+                          ("name", egg["names"][lang]), ("name_en", egg["names"]["en"]),
+                          ("icon_asset", item_icons.get((egg["icon"] or "").lower()))))
         out.append(f'    [{lua_value(egg["id"])}] = {{ {body} }},')
     out += ["  },", "  unique = {"]
     for u in unique:

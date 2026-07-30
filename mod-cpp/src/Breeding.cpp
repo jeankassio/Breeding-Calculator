@@ -28,6 +28,11 @@ namespace palbreed
         {
             return p->zukan > 0 ? p->zukan : 9999;
         }
+
+        auto same_tribe(const PalInfo* a, const PalInfo* b) -> bool
+        {
+            return equals(a->tribe, b->tribe);
+        }
     } // namespace
 
     Engine::Engine()
@@ -60,6 +65,24 @@ namespace palbreed
         {
             m_by_rank[static_cast<std::size_t>(rank)] = nearest(rank);
         }
+
+        // Especies selecionaveis (pool + lendarias): o flag `selectable` ja e
+        // calculado por gen_cpp_data.py, uma unica linha por tribo.
+        for (std::size_t i = 0; i < kPalCount; ++i)
+        {
+            if (kPals[i].selectable)
+            {
+                m_species.push_back(&kPals[i]);
+                m_species_by_tribe[kPals[i].tribe] = &kPals[i];
+            }
+        }
+        std::sort(m_species.begin(), m_species.end(), [](const PalInfo* a, const PalInfo* b) {
+            if (paldex_order(a) != paldex_order(b))
+            {
+                return paldex_order(a) < paldex_order(b);
+            }
+            return std::strcmp(a->id, b->id) < 0;
+        });
     }
 
     auto Engine::find(std::string_view id) const -> const PalInfo*
@@ -156,6 +179,16 @@ namespace palbreed
             out.from_unique = true;
             return out;
         }
+        // mesma especie sempre gera ela mesma (regra do jogo; unico caminho
+        // para as IgnoreCombi/lendarias, que estao fora do pool de rank)
+        if (same_tribe(&male, &female))
+        {
+            if (const auto it = m_species_by_tribe.find(male.tribe); it != m_species_by_tribe.end())
+            {
+                out.child = it->second;
+                return out;
+            }
+        }
         out.target_rank = (male.combi_rank + female.combi_rank + 1) / 2;
         out.child = static_cast<std::size_t>(out.target_rank) < m_by_rank.size()
                         ? m_by_rank[static_cast<std::size_t>(out.target_rank)]
@@ -166,12 +199,13 @@ namespace palbreed
     auto Engine::pairs_for(const PalInfo& child) const -> std::vector<ParentPair>
     {
         std::vector<ParentPair> pairs;
-        for (std::size_t i = 0; i < m_pool.size(); ++i)
+        // pais podem ser qualquer especie selecionavel (inclui as lendarias)
+        for (std::size_t i = 0; i < m_species.size(); ++i)
         {
-            for (std::size_t j = i; j < m_pool.size(); ++j)
+            for (std::size_t j = i; j < m_species.size(); ++j)
             {
-                const PalInfo* a = m_pool[i];
-                const PalInfo* b = m_pool[j];
+                const PalInfo* a = m_species[i];
+                const PalInfo* b = m_species[j];
                 // as duas ordens porque algumas linhas unicas exigem um genero
                 const Outcome ab = outcome(*a, *b);
                 const Outcome ba = outcome(*b, *a);

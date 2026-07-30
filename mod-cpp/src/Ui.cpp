@@ -1,9 +1,11 @@
 #include "Ui.hpp"
+#include "Config.hpp"
 #include "Language.hpp"
 
 #include <algorithm>
 #include <cfloat>
 #include <cstdio>
+#include <string>
 
 #include <imgui.h>
 
@@ -114,6 +116,14 @@ namespace palbreed
             const float offset = (width - ImGui::CalcTextSize(label.c_str()).x) * 0.5f;
             ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (std::max)(0.0f, offset));
             ImGui::TextColored(color, "%s", label.c_str());
+        }
+
+        // "F6 closes this window", com a tecla que o usuario configurou.
+        auto close_hint() -> const char*
+        {
+            static const std::string hint = std::string("        ") + config().hotkey_name
+                                            + " or Esc closes this window";
+            return hint.c_str();
         }
 
         auto draw_arrow(float size, const ImVec4& color) -> void
@@ -246,34 +256,50 @@ namespace palbreed
         ImGui::InputTextWithHint("##search", "search...", filter, sizeof(filter));
         ImGui::EndGroup();
 
+        // Filtra uma vez por frame; o clipper desenha so as linhas visiveis
+        // (das ~290, umas 10) -- e o que mantem o abrir instantaneo e faz os
+        // icones visiveis carregarem no primeiro frame em vez de ao longo de
+        // dezenas de frames.
+        m_filtered.clear();
+        for (const auto* candidate : m_engine.species())
+        {
+            if (Engine::matches(*candidate, filter))
+            {
+                m_filtered.push_back(candidate);
+            }
+        }
+
         ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.08f, 0.085f, 0.11f, 1.0f));
         if (ImGui::BeginListBox("##list", ImVec2(-1, -1)))
         {
-            for (const auto* candidate : m_engine.pool())
+            const float row_height = kListIcon + ImGui::GetStyle().ItemSpacing.y;
+            ImGuiListClipper clipper;
+            clipper.Begin(static_cast<int>(m_filtered.size()), row_height);
+            while (clipper.Step())
             {
-                if (!Engine::matches(*candidate, filter))
+                for (int index = clipper.DisplayStart; index < clipper.DisplayEnd; ++index)
                 {
-                    continue;
+                    const PalInfo* candidate = m_filtered[static_cast<std::size_t>(index)];
+                    ImGui::PushID(candidate);
+                    const bool is_selected = (*selected == candidate);
+                    const ImVec2 row_start = ImGui::GetCursorScreenPos();
+                    if (ImGui::Selectable("##item", is_selected, 0, ImVec2(0, kListIcon)))
+                    {
+                        *selected = candidate;
+                    }
+                    auto* draw = ImGui::GetWindowDrawList();
+                    if (const ImTextureID texture = m_textures.pal(candidate->id, candidate->tribe))
+                    {
+                        draw->AddImage(texture, row_start,
+                                       ImVec2(row_start.x + kListIcon, row_start.y + kListIcon));
+                    }
+                    const float text_y = row_start.y + (kListIcon - ImGui::GetTextLineHeight()) * 0.5f;
+                    draw->AddText(ImVec2(row_start.x + kListIcon + 10.0f, text_y),
+                                  ImGui::GetColorU32(is_selected ? color
+                                                                 : ImVec4(0.90f, 0.91f, 0.94f, 1.0f)),
+                                  display_name(*candidate));
+                    ImGui::PopID();
                 }
-                ImGui::PushID(candidate);
-                const bool is_selected = (*selected == candidate);
-                const ImVec2 row_start = ImGui::GetCursorScreenPos();
-                if (ImGui::Selectable("##item", is_selected, 0, ImVec2(0, kListIcon)))
-                {
-                    *selected = candidate;
-                }
-                // icone e nome desenhados por cima da area clicavel
-                auto* draw = ImGui::GetWindowDrawList();
-                if (const ImTextureID texture = m_textures.pal(candidate->id, candidate->tribe))
-                {
-                    draw->AddImage(texture, row_start,
-                                   ImVec2(row_start.x + kListIcon, row_start.y + kListIcon));
-                }
-                const float text_y = row_start.y + (kListIcon - ImGui::GetTextLineHeight()) * 0.5f;
-                draw->AddText(ImVec2(row_start.x + kListIcon + 10.0f, text_y),
-                              ImGui::GetColorU32(is_selected ? color : ImVec4(0.90f, 0.91f, 0.94f, 1.0f)),
-                              display_name(*candidate));
-                ImGui::PopID();
             }
             ImGui::EndListBox();
         }
@@ -294,6 +320,10 @@ namespace palbreed
 
         const float step = kPoolIcon + ImGui::GetStyle().ItemSpacing.x + 6.0f;
         const int columns = (std::max)(1, static_cast<int>(ImGui::GetContentRegionAvail().x / step));
+        // Com a janela baixa nao cabe icone + nome; melhor so o icone inteiro
+        // do que os dois cortados pela metade (o tooltip continua dizendo quem e).
+        const bool captions =
+            ImGui::GetContentRegionAvail().y >= kPoolIcon + ImGui::GetTextLineHeightWithSpacing();
 
         int column = 0;
         for (const auto* pal : result.egg_pool)
@@ -301,7 +331,10 @@ namespace palbreed
             const bool is_child = (pal == result.child);
             ImGui::BeginGroup();
             pal_icon(pal, kPoolIcon, is_child);
-            centered_caption(display_name(*pal), kPoolIcon, is_child ? kChild : kDim);
+            if (captions)
+            {
+                centered_caption(display_name(*pal), kPoolIcon, is_child ? kChild : kDim);
+            }
             ImGui::EndGroup();
 
             if (ImGui::IsItemHovered())
@@ -491,41 +524,53 @@ namespace palbreed
             m_male_filter[0] = m_female_filter[0] = '\0';
         }
         ImGui::SameLine();
-        ImGui::TextColored(kFaint, "        F6 closes this window");
+        ImGui::TextColored(kFaint, "%s", close_hint());
         ImGui::Separator();
 
         const bool has_pair = m_male != nullptr && m_female != nullptr;
         const Result result = has_pair ? m_engine.breed(*m_male, *m_female) : Result{};
         m_egg_pool_size = result.egg_pool.size();
 
-        // O bloco de baixo (ovo + filhotes) tem altura conhecida; os pais ficam
-        // com o resto, para a lista crescer junto com a janela em vez de o
-        // rodape sumir quando a janela e pequena.
+        // Os dois blocos disputam a altura: em cima as listas de pais, embaixo
+        // o resultado (ovo -> filhote + a grade de quem sai do mesmo ovo). O
+        // resultado pede o que precisa; se nao couber, a grade perde linhas
+        // antes de qualquer coisa ser cortada pela borda.
         const ImGuiStyle& style = ImGui::GetStyle();
         const float spacing = style.ItemSpacing.x;
         const ImVec2 available = ImGui::GetContentRegionAvail();
         const float column = (available.x - spacing) * 0.5f;
 
-        // a grade de filhotes ocupa so as linhas que precisa (ate 3), o que
-        // sobra vai para as listas de selecao
         const float line = ImGui::GetTextLineHeightWithSpacing();
         const float pool_step = kPoolIcon + style.ItemSpacing.x + 6.0f;
         const int pool_columns = (std::max)(1, static_cast<int>(
             (available.x - style.WindowPadding.x * 2.0f) / pool_step));
         const int pool_count = static_cast<int>(m_egg_pool_size);
-        const float pool_rows = static_cast<float>(
-            std::clamp((pool_count + pool_columns - 1) / pool_columns, 1, 3));
-        const float pool_height = (kPoolIcon + line) * pool_rows + style.WindowPadding.y * 2.0f;
+        const int wanted_rows = std::clamp((pool_count + pool_columns - 1) / pool_columns, 1, 3);
+
         // a coluna de texto do filhote (nome, etiquetas, rank, ovo) pode passar
         // da altura do icone
         const float info_height = (std::max)(kBigIcon, line * 4.0f + style.ItemSpacing.y);
-        const float result_height = style.WindowPadding.y * 2.0f     // recuo do child
-                                    + line                            // recapitulacao do par
-                                    + info_height                     // ovo -> filhote
-                                    + line                            // titulo da grade
-                                    + pool_height
-                                    + style.ItemSpacing.y * 4.0f;
-        const float parents_height = (std::max)(240.0f, available.y - result_height - spacing);
+        const float result_fixed = style.WindowPadding.y * 4.0f      // recuo do child + da grade
+                                   + line                            // recapitulacao do par
+                                   + info_height                     // ovo -> filhote
+                                   + line                            // titulo da grade
+                                   + style.ItemSpacing.y * 4.0f;
+        const float pool_row = kPoolIcon + line;
+
+        // Espaco que sobra depois de garantir uma lista de pais utilizavel.
+        constexpr float kParentsMin = 220.0f;
+        const float total = available.y - spacing;
+        const float budget = total - kParentsMin;
+
+        int pool_rows = wanted_rows;
+        while (pool_rows > 1 && result_fixed + pool_row * pool_rows > budget)
+        {
+            --pool_rows;
+        }
+        // Uma linha da grade e o minimo: abaixo disso o bloco de resultado nao
+        // faz sentido, e ai quem cede e a lista de pais.
+        const float result_height = result_fixed + pool_row * static_cast<float>(pool_rows);
+        const float parents_height = (std::max)(160.0f, total - result_height);
 
         ImGui::BeginChild("##father", ImVec2(column, parents_height), ImGuiChildFlags_Borders);
         render_picker_card("Male", kMale, m_male, m_male_filter, &m_male);
@@ -549,7 +594,7 @@ namespace palbreed
             m_child_filter[0] = '\0';
         }
         ImGui::SameLine();
-        ImGui::TextColored(kFaint, "        F6 closes this window");
+        ImGui::TextColored(kFaint, "%s", close_hint());
         ImGui::Separator();
 
         const ImGuiStyle& style = ImGui::GetStyle();
@@ -570,12 +615,26 @@ namespace palbreed
         ImGui::EndChild();
     }
 
-    auto Ui::render(bool* open, ITextureBackend* textures, const char* icons_dir) -> void
+    auto Ui::render(bool* open, ITextureBackend* textures, const char* icons_dir,
+                    uint32_t renderer_generation) -> void
     {
+        // Renderizador novo: os ImTextureID guardados apontam para descritores
+        // do anterior, que ja foram liberados. Desenhar com eles e crash.
+        if (renderer_generation != m_renderer_generation)
+        {
+            m_textures.forget();
+            m_textures_ready = false;
+            m_renderer_generation = renderer_generation;
+        }
         if (!m_textures_ready && textures != nullptr)
         {
             m_textures.init(textures, icons_dir);
             m_textures_ready = true;
+        }
+        m_textures.begin_frame();
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape))
+        {
+            *open = false;
         }
         if (!m_style_applied)
         {
@@ -583,8 +642,51 @@ namespace palbreed
             m_style_applied = true;
         }
 
-        ImGui::SetNextWindowSize(ImVec2(1080, 860), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSizeConstraints(ImVec2(860, 560), ImVec2(FLT_MAX, FLT_MAX));
+        // Abre encostada no topo e centralizada, com a altura pedida no
+        // config.ini (60% da tela por padrao). Depois disso o jogador manda:
+        // FirstUseEver so vale enquanto ele nao mover nem redimensionar.
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        const ImVec2 area = viewport->WorkSize;
+        const Config& cfg = config();
+
+        // A porcentagem manda, mas nunca para baixo do tamanho em que a aba
+        // "Parents -> Child" ainda mostra tudo: em 1920x1080, 60% dariam 648px
+        // e a grade de filhotes ficaria espremida. Em telas grandes (1440p,
+        // 4K) a porcentagem e que vale, e a janela cresce junto.
+        const float ceiling_h = area.y * 0.92f;
+        const float ceiling_w = area.x * 0.95f;
+        const float height = std::clamp(area.y * cfg.height_percent,
+                                        (std::min)(860.0f, ceiling_h), ceiling_h);
+        const float width = std::clamp(area.x * cfg.width_percent,
+                                       (std::min)(1080.0f, ceiling_w), ceiling_w);
+
+        const float top = viewport->WorkPos.y + area.y * cfg.top_margin;
+        ImVec2 position{viewport->WorkPos.x + area.x * 0.5f, top};
+        ImVec2 pivot{0.5f, 0.0f};
+        if (cfg.position == "center")
+        {
+            position = ImVec2(viewport->WorkPos.x + area.x * 0.5f,
+                              viewport->WorkPos.y + area.y * 0.5f);
+            pivot = ImVec2(0.5f, 0.5f);
+        }
+        else if (cfg.position == "top-left")
+        {
+            position = ImVec2(viewport->WorkPos.x + area.x * cfg.top_margin, top);
+            pivot = ImVec2(0.0f, 0.0f);
+        }
+        else if (cfg.position == "top-right")
+        {
+            position = ImVec2(viewport->WorkPos.x + area.x * (1.0f - cfg.top_margin), top);
+            pivot = ImVec2(1.0f, 0.0f);
+        }
+
+        ImGui::SetNextWindowPos(position, ImGuiCond_FirstUseEver, pivot);
+        ImGui::SetNextWindowSize(ImVec2(width, height), ImGuiCond_FirstUseEver);
+        // O minimo nao pode passar da tela: em 1280x720 os 860x560 antigos
+        // esticavam a janela para fora e a lista de baixo sumia.
+        ImGui::SetNextWindowSizeConstraints(
+            ImVec2((std::min)(860.0f, area.x * 0.95f), (std::min)(560.0f, area.y * 0.90f)),
+            ImVec2(FLT_MAX, FLT_MAX));
         if (!ImGui::Begin("Breeding Calculator###PalBreedCalc", open, ImGuiWindowFlags_NoCollapse))
         {
             ImGui::End();

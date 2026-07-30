@@ -33,6 +33,19 @@ namespace palbreed
         {
             return block_bytes == 0 ? height : (height + 3) / 4;
         }
+
+        // Quantos bytes o backend vai mesmo ler. Um .dds truncado (download
+        // incompleto, extracao pela metade) faria a copia passar do fim do
+        // buffer -- violacao de acesso dentro do Present, ou seja, jogo fechado.
+        auto expected_bytes() const -> std::size_t
+        {
+            return static_cast<std::size_t>(row_pitch()) * rows();
+        }
+
+        auto complete() const -> bool
+        {
+            return width > 0 && height > 0 && size >= expected_bytes();
+        }
     };
 
     // Implementado por TextureBackendD3D11/D3D12.
@@ -51,6 +64,18 @@ namespace palbreed
         // fora do jogo passa o caminho do repositorio.
         auto init(ITextureBackend* backend, const char* icons_dir = nullptr) -> void;
         auto shutdown() -> void;
+
+        // Esquece os identificadores sem tocar no backend: usado quando o
+        // renderizador e recriado (troca de resolucao, retomada do DX12). Os
+        // ImTextureID antigos apontam para descritores que ja nao existem, e
+        // desenhar com eles derruba o jogo.
+        auto forget() -> void;
+
+        // Chamar no inicio de cada frame: limita quantos icones sao lidos do
+        // disco/enviados a GPU por frame. Sem isso, o primeiro F6 carrega os
+        // 263 icones das listas num unico Present (em DX12 cada um espera uma
+        // fence) -- o "peso" relatado ao abrir a janela.
+        auto begin_frame() -> void;
         auto ready() const -> bool
         {
             return m_backend != nullptr;
@@ -67,5 +92,6 @@ namespace palbreed
         ITextureBackend* m_backend{};
         std::string m_icons_dir{};
         std::unordered_map<std::string, ImTextureID> m_textures{};
+        int m_frame_budget{16};
     };
 } // namespace palbreed

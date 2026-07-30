@@ -25,14 +25,19 @@ def lua_engine():
     return lua.execute("""
         local breeding = require("breeding")
         local data = require("data")
+        local pool = breeding.buildPool(data.pals)
+        local species, speciesByTribe = breeding.buildSpecies(data.pals, pool)
         local db = {
             pals = data.pals,
-            pool = breeding.buildPool(data.pals),
+            pool = pool,
+            species = species,
+            speciesByTribe = speciesByTribe,
             uniqueIndex = breeding.indexUnique(data.unique),
             eggs = data.eggs,
         }
         return {
             poolSize = #db.pool,
+            speciesSize = #db.species,
             breed = function(a, b, ga, gb)
                 local r = breeding.breed(db, db.pals[a], db.pals[b], ga, gb)
                 return r.child.id, r.rule
@@ -41,6 +46,15 @@ def lua_engine():
                 local ids = {}
                 for i, p in ipairs(breeding.eggPool(db, eggId)) do ids[i] = p.id end
                 return table.concat(ids, ",")
+            end,
+            pairsFor = function(childId)
+                local pairs_ = breeding.pairsFor(db, db.pals[childId])
+                local uniq, gendered = 0, 0
+                for _, p in ipairs(pairs_) do
+                    uniq = uniq + (p.from_unique and 1 or 0)
+                    gendered = gendered + (p.gender_specific and 1 or 0)
+                end
+                return { #pairs_, uniq, gendered }
             end,
         }
     """)
@@ -91,7 +105,38 @@ def main() -> int:
                 print(f"  ovo {egg}:\n    lua   ={lua.eggPool(egg)}\n    python={want}")
     print(f"listas de ovo conferidas: {len(py.by_egg) - egg_bad}/{len(py.by_egg)}")
 
-    return 1 if (bad or egg_bad) else 0
+    # busca reversa (amostrada): total de pares por filhote, quantos unicos e
+    # quantos de genero fixo, contra o breed() do proprio Python (species x species)
+    forward = {}
+    for a in py.species:
+        for b in py.species:
+            r = py.breed(a.id, b.id)
+            forward[(a.id, b.id)] = (r["child"].id, r["rule"])
+
+    sample = [p for i, p in enumerate(py.species) if i % 6 == 0]
+    reverse_bad = 0
+    for child in sample:
+        want_total = want_unique = want_gendered = 0
+        for i, a in enumerate(py.species):
+            for b in py.species[i:]:
+                ab = forward[(a.id, b.id)]
+                ba = forward[(b.id, a.id)]
+                ab_ok = ab[0] == child.id
+                ba_ok = ba[0] == child.id
+                if not ab_ok and not ba_ok:
+                    continue
+                want_total += 1
+                rule = ab[1] if ab_ok else ba[1]
+                want_unique += 1 if rule == "unique" else 0
+                want_gendered += 1 if ab_ok != ba_ok else 0
+        got = lua.pairsFor(child.id)
+        if (want_total, want_unique, want_gendered) != (got[1], got[2], got[3]):
+            reverse_bad += 1
+            print(f"  reversa {child.id}: lua={got} python="
+                  f"({want_total},{want_unique},{want_gendered})")
+    print(f"busca reversa conferida: {len(sample) - reverse_bad}/{len(sample)} filhotes")
+
+    return 1 if (bad or egg_bad or reverse_bad) else 0
 
 
 if __name__ == "__main__":

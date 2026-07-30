@@ -112,7 +112,10 @@ namespace palbreed
 
             auto create(const DdsImage& image) -> ImTextureID override
             {
-                if (m_device == nullptr || m_queue == nullptr)
+                // Depois de um envio que nao terminou, reusar o alocador seria
+                // mexer em memoria que a GPU ainda le. Melhor ficar sem icones
+                // do que derrubar o device.
+                if (m_device == nullptr || m_queue == nullptr || m_broken)
                 {
                     return 0;
                 }
@@ -167,7 +170,13 @@ namespace palbreed
                 // a linha na GPU e alinhada em 256 bytes, a do arquivo nao
                 uint8_t* mapped{};
                 const D3D12_RANGE nothing{0, 0};
-                upload->Map(0, &nothing, reinterpret_cast<void**>(&mapped));
+                if (FAILED(upload->Map(0, &nothing, reinterpret_cast<void**>(&mapped)))
+                    || mapped == nullptr)
+                {
+                    upload->Release();
+                    texture->Release();
+                    return 0;
+                }
                 for (uint32_t row = 0; row < rows; ++row)
                 {
                     std::memcpy(mapped + footprint.Offset + static_cast<std::size_t>(row) * footprint.Footprint.RowPitch,
@@ -201,9 +210,20 @@ namespace palbreed
                 ID3D12CommandList* lists[] = {m_list};
                 m_queue->ExecuteCommandLists(1, lists);
                 m_queue->Signal(m_fence, ++m_fence_value);
-                while (m_fence->GetCompletedValue() < m_fence_value)
+                if (m_fence->GetCompletedValue() < m_fence_value)
                 {
-                    Sleep(0);
+                    m_fence->SetEventOnCompletion(m_fence_value, m_upload_event);
+                    WaitForSingleObject(m_upload_event, 2000);
+                }
+                // Soltar o upload heap (e reusar o alocador na proxima textura)
+                // antes de a copia terminar corrompe o que a GPU esta lendo.
+                // Se a espera estourou, o envio para aqui de vez.
+                if (m_fence->GetCompletedValue() < m_fence_value)
+                {
+                    m_broken = true;
+                    log_error("texture upload did not finish in time -- icons disabled");
+                    texture->Release();
+                    return 0;               // upload vaza de proposito: a GPU ainda o usa
                 }
                 upload->Release();
 
@@ -237,6 +257,7 @@ namespace palbreed
                 if (m_list) { m_list->Release(); m_list = nullptr; }
                 if (m_allocator) { m_allocator->Release(); m_allocator = nullptr; }
                 if (m_fence) { m_fence->Release(); m_fence = nullptr; }
+                if (m_upload_event) { CloseHandle(m_upload_event); m_upload_event = nullptr; }
                 m_device = nullptr;
                 m_queue = nullptr;
             }
@@ -255,6 +276,8 @@ namespace palbreed
             ID3D12GraphicsCommandList* m_list{};
             ID3D12Fence* m_fence{};
             UINT64 m_fence_value{};
+            HANDLE m_upload_event{CreateEventW(nullptr, FALSE, FALSE, nullptr)};
+            bool m_broken{};                // um envio nao terminou: nao envia mais
             std::vector<Entry> m_textures{};
         };
 
@@ -374,6 +397,7 @@ namespace palbreed
                 if (m_fence) { m_fence->Release(); m_fence = nullptr; }
                 if (m_rtv_heap) { m_rtv_heap->Release(); m_rtv_heap = nullptr; }
                 m_srv_heap.release();
+                if (m_wait_event) { CloseHandle(m_wait_event); m_wait_event = nullptr; }
                 if (m_device) { m_device->Release(); m_device = nullptr; }
             }
 
@@ -412,6 +436,14 @@ namespace palbreed
                 {
                     m_fence->SetEventOnCompletion(frame.fence_value, m_wait_event);
                     WaitForSingleObject(m_wait_event, 200);
+                    // Resetar um alocador com comandos ainda em voo e
+                    // comportamento indefinido: na pratica, device removido e
+                    // jogo fechado. Se a GPU nao acompanhou, pula o frame --
+                    // perder o overlay por um quadro nao custa nada.
+                    if (m_fence->GetCompletedValue() < frame.fence_value)
+                    {
+                        return;
+                    }
                 }
 
                 frame.allocator->Reset();
@@ -442,6 +474,11 @@ namespace palbreed
 
             auto release_targets() -> void override
             {
+                // Espera a GPU terminar o que enviamos antes de soltar os back
+                // buffers: liberar com comandos em voo durante um ResizeBuffers
+                // (alt-tab, mudanca de resolucao com a janela aberta) derruba o
+                // device -- outra causa plausivel dos crashes relatados.
+                wait_gpu_idle();
                 for (auto& frame : m_frames)
                 {
                     if (frame.target)
@@ -449,6 +486,7 @@ namespace palbreed
                         frame.target->Release();
                         frame.target = nullptr;
                     }
+                    frame.fence_value = 0;
                 }
             }
 
@@ -466,6 +504,16 @@ namespace palbreed
                 UINT64 fence_value{};
             };
 
+            auto wait_gpu_idle() -> void
+            {
+                if (m_fence && m_wait_event && m_fence_value != 0
+                    && m_fence->GetCompletedValue() < m_fence_value)
+                {
+                    m_fence->SetEventOnCompletion(m_fence_value, m_wait_event);
+                    WaitForSingleObject(m_wait_event, 1000);
+                }
+            }
+
             auto create_render_targets(IDXGISwapChain* swapchain) -> void
             {
                 const D3D12_CPU_DESCRIPTOR_HANDLE start = m_rtv_heap->GetCPUDescriptorHandleForHeapStart();
@@ -475,6 +523,14 @@ namespace palbreed
                     if (FAILED(swapchain->GetBuffer(i, IID_PPV_ARGS(&buffer))) || buffer == nullptr)
                     {
                         continue;
+                    }
+                    // Esta funcao tambem e chamada quando so UM dos back
+                    // buffers esta faltando; sem soltar o anterior, as
+                    // referencias antigas ficam presas e o ResizeBuffers do
+                    // jogo passa a falhar (tela preta / crash no alt-tab).
+                    if (m_frames[i].target)
+                    {
+                        m_frames[i].target->Release();
                     }
                     m_frames[i].descriptor.ptr = start.ptr + static_cast<SIZE_T>(i) * m_rtv_step;
                     m_device->CreateRenderTargetView(buffer, nullptr, m_frames[i].descriptor);

@@ -34,17 +34,34 @@ def c_string(text: str | None) -> str:
     return "".join(out)
 
 
+def _rank(p: dict) -> tuple:
+    return (p["id"].lower() != p["tribe"].lower(), p["is_boss"], -(p["zukan"] or -1))
+
+
 def build_pool(pals: list[dict]) -> set[str]:
-    """Uma linha por tribo — a mesma regra de tools/breeding.py."""
+    """Resultados de rank: uma linha por tribo (exclui IgnoreCombi) — a mesma
+    regra de tools/breeding.py."""
     by_tribe: dict[str, list[dict]] = {}
     for p in pals:
         if not p["ignore_combi"] and p["tribe"]:
             by_tribe.setdefault(p["tribe"], []).append(p)
+    return {sorted(rows, key=_rank)[0]["id"] for rows in by_tribe.values()}
 
-    def rank(p: dict) -> tuple:
-        return (p["id"].lower() != p["tribe"].lower(), p["is_boss"], -(p["zukan"] or -1))
 
-    return {sorted(rows, key=rank)[0]["id"] for rows in by_tribe.values()}
+def build_species(pals: list[dict], pool: set[str]) -> set[str]:
+    """Selecionaveis como pai: o pool + as IgnoreCombi/lendarias (uma linha por
+    tribo fora do pool, so especies reais). Mesma regra de breeding.py."""
+    species = set(pool)
+    pool_tribes = {p["tribe"] for p in pals if p["id"] in pool}
+    by_tribe: dict[str, list[dict]] = {}
+    for p in pals:
+        if p["tribe"] and p["tribe"] not in pool_tribes:
+            by_tribe.setdefault(p["tribe"], []).append(p)
+    for rows in by_tribe.values():
+        best = sorted(rows, key=_rank)[0]
+        if best["zukan"] and best["zukan"] > 0 and not best["is_boss"]:
+            species.add(best["id"])
+    return species
 
 
 def main() -> int:
@@ -53,6 +70,7 @@ def main() -> int:
     eggs = json.loads((data / "eggs.json").read_text(encoding="utf-8"))
     unique = json.loads((data / "combi_unique.json").read_text(encoding="utf-8"))
     pool = build_pool(pals)
+    species = build_species(pals, pool)
 
     lines = [
         "// GERADO POR tools/gen_cpp_data.py -- NAO EDITE A MAO",
@@ -63,11 +81,12 @@ def main() -> int:
         "    const PalInfo kPals[] = {",
     ]
     for p in pals:
-        lines.append("        {%s, %s, %s, %s, %d, %d, %d, %s, %s, %s, %d, %s}," % (
+        lines.append("        {%s, %s, %s, %s, %d, %d, %d, %s, %s, %s, %d, %s, %s}," % (
             c_string(p["id"]), c_string(p["names"]["pt-BR"]), c_string(p["names"]["en"]),
             c_string(p["tribe"]), p["zukan"] or -1, p["combi_rank"], p["combi_priority"],
             c_string(p["element1"]), c_string(p["size"]), c_string(p["egg"]),
             p["male_probability"], "true" if p["id"] in pool else "false",
+            "true" if p["id"] in species else "false",
         ))
     lines += ["    };",
               f"    const std::size_t kPalCount = {len(pals)};", "",
@@ -90,7 +109,7 @@ def main() -> int:
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text("\n".join(lines), encoding="ascii")
     print(f"  {OUT.relative_to(ROOT)}  ({OUT.stat().st_size / 1024:.0f} KB, "
-          f"{len(pals)} Pals, {len(pool)} no pool)")
+          f"{len(pals)} Pals, {len(pool)} no pool, {len(species)} selecionaveis)")
     return 0
 
 

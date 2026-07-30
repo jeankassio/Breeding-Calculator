@@ -1,15 +1,15 @@
 -- =====================================================================
--- PalBreedCalc - parte Lua (opcional)
+-- PalBreedCalc - parte Lua
 --
--- A janela (F6) e a conta vivem no mod C++ (dlls/main.dll), com os dados
--- extraidos do pak compilados junto. Este script serve para duas coisas:
+-- Duas interfaces possiveis para o F6 (escolhida em uiconfig.lua):
+--   * overlay ImGui do mod C++ (dlls/main.dll) - pacote Workshop/manual;
+--   * janela UMG 100%% Lua (ui_umg.lua)         - pacote Nexus, sem DLL.
 --
---   PalBreedCalc("Lamball", "Cattiva")   consulta rapida pelo console do UE4SS
+-- E, pelo console do UE4SS, sempre:
+--   PalBreedCalc("Lamball", "Cattiva")   consulta rapida
 --   PalBreedCalcCheck()                  compara os dados embutidos com as
---                                        DataTables do jogo em execucao e
---                                        aponta o que um patch mudou
---
--- Nao registra atalho nenhum: o F6 e do mod C++.
+--                                        DataTables do jogo em execucao
+--   PalBreedCalcUI()                     forca a janela Lua, qualquer config
 -- =====================================================================
 
 local breeding = require("breeding")
@@ -46,9 +46,13 @@ local function buildDb()
             rarity = p.rarity, is_boss = p.is_boss, egg = p.egg,
         }
     end
+    local pool = breeding.buildPool(pals)
+    local species, speciesByTribe = breeding.buildSpecies(pals, pool)
     return {
         pals = pals,
-        pool = breeding.buildPool(pals),
+        pool = pool,
+        species = species,
+        speciesByTribe = speciesByTribe,
         uniqueIndex = breeding.indexUnique(baseData.unique),
         uniqueCount = #baseData.unique,
         eggs = baseData.eggs,
@@ -158,4 +162,86 @@ function PalBreedCalcCheck()
     end
 end
 
-log("loaded. Console: PalBreedCalc(\"Lamball\", \"Cattiva\") / PalBreedCalcCheck()")
+-- ------------------------------------------------------------ janela Lua
+-- A pasta do proprio mod, tirada do package.path que o UE4SS monta
+-- (".../Mods/PalBreedCalc/Scripts/?.lua"). E o unico caminho que vale para
+-- qualquer instalacao; os relativos abaixo sao so reforco.
+local function modDirs()
+    local dirs = {}
+    for entry in string.gmatch(package.path or "", "[^;]+") do
+        local dir = entry:match("^(.*)[/\\][Ss]cripts[/\\]%?%.lua$")
+        if dir then dirs[#dirs + 1] = dir end
+    end
+    return dirs
+end
+
+local function dllPresent()
+    local candidates = {}
+    for _, dir in ipairs(modDirs()) do
+        candidates[#candidates + 1] = dir .. "/dlls/main.dll"
+    end
+    -- cwd do jogo = Pal\Binaries\Win64; cobre a instalacao padrao do UE4SS e
+    -- a gerenciada da Workshop
+    for _, path in ipairs({
+        "ue4ss/Mods/PalBreedCalc/dlls/main.dll",
+        "Mods/PalBreedCalc/dlls/main.dll",
+        "../../../Mods/NativeMods/UE4SS/Mods/PalBreedCalc/dlls/main.dll",
+    }) do
+        candidates[#candidates + 1] = path
+    end
+
+    for _, path in ipairs(candidates) do
+        local f = io.open(path, "rb")
+        if f then f:close() return true end
+    end
+    return false
+end
+
+local function openLuaUi()
+    if not ensureDb() then
+        log("database unavailable")
+        return
+    end
+    local ui = require("ui_umg")
+    ui.setLogger(log)
+    ui.toggle(db)
+end
+
+function PalBreedCalcUI()
+    guarded("ui_umg", openLuaUi)
+end
+
+-- Nome de tecla -> constante do UE4SS. Os digitos tem nome por extenso no
+-- enum, o resto bate direto ("F6" -> Key.F6, "h" -> Key.H).
+local digitKeys = {
+    ["0"] = "ZERO", ["1"] = "ONE", ["2"] = "TWO", ["3"] = "THREE", ["4"] = "FOUR",
+    ["5"] = "FIVE", ["6"] = "SIX", ["7"] = "SEVEN", ["8"] = "EIGHT", ["9"] = "NINE",
+}
+
+local function resolveKey(name)
+    if type(name) ~= "string" or name == "" then return nil end
+    local upper = name:upper():gsub("[%s%-]", "_")
+    return Key[digitKeys[upper] or upper]
+end
+
+local cfgOk, uiconfig = pcall(require, "uiconfig")
+local luaUi = cfgOk and uiconfig and uiconfig.lua_ui or false
+if luaUi == "auto" then
+    luaUi = not dllPresent()
+end
+if luaUi == true then
+    -- A janela da DLL le o atalho de config.ini; a janela Lua le daqui, para
+    -- as duas interfaces responderem a mesma tecla.
+    local wanted = cfgOk and uiconfig and uiconfig.hotkey or "F6"
+    local key = resolveKey(wanted)
+    if key == nil then
+        log(string.format("unknown hotkey %q in uiconfig.lua -- using F6", tostring(wanted)))
+        wanted, key = "F6", Key.F6
+    end
+    RegisterKeyBind(key, function()
+        guarded("ui_umg", openLuaUi)
+    end)
+    log(string.format("loaded (pure Lua UI). %s opens the calculator.", wanted:upper()))
+else
+    log("loaded. Console: PalBreedCalc(\"Lamball\", \"Cattiva\") / PalBreedCalcCheck()")
+end

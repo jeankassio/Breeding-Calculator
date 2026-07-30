@@ -16,14 +16,38 @@ demais casos.
 Base: UE4SS 3.0.1 (já instalado em
 `G:\SteamLibrary\steamapps\common\Palworld\Mods\NativeMods\UE4SS`).
 
+## Configuração (`config.ini`)
+
+Fica em `Mods\PalBreedCalc\config.ini`, ao lado da pasta `dlls`. Se o arquivo
+não existir, o mod cria um com os padrões comentados na primeira execução.
+Vale reiniciar o jogo depois de editar.
+
+| chave | padrão | o que faz |
+|---|---|---|
+| `hotkey` | `F6` | tecla que abre/fecha. Aceita `F1`–`F24`, `A`–`Z`, `0`–`9`, `NUM_0`–`NUM_9`, `HOME`, `END`, `INSERT`, `DELETE`, `PAGE_UP`, `PAGE_DOWN`, `TAB`, `SPACE` |
+| `ctrl` / `alt` / `shift` | `false` | exige o modificador junto (`ctrl = true` + `hotkey = H` → **Ctrl+H**) |
+| `height_percent` | `60` | altura da janela em % da tela |
+| `width_percent` | `62` | largura da janela em % da tela |
+| `position` | `top-center` | onde ela abre: `top-center`, `center`, `top-left`, `top-right` |
+
+A janela abre encostada no topo e centralizada, com 60% da altura da tela — mas
+nunca menor que 1080×860, senão a aba *Parents → Child* não cabe inteira. Em
+telas grandes (1440p, 4K) a porcentagem é que manda e a janela cresce junto.
+Depois que o jogador mover ou redimensionar, a escolha dele vale até fechar o
+jogo.
+
+O `hotkey` do `config.ini` vale para a janela da DLL (a normal). A janela Lua de
+fallback lê o dela em `Scripts/uiconfig.lua`.
+
 ## Estrutura
 
 ```
 tools/     pipeline de extração + motor de referência em Python
 data/      dados gerados a partir do jogo (pals.json, eggs.json, combi_unique.json)
 mod-cpp/   código do mod (C++, ImGui) — gera mod/PalBreedCalc/dlls/main.dll
-mod/PalBreedCalc/   o mod pronto para instalar na mão (dll + ícones + Lua)
+mod/PalBreedCalc/   o mod pronto para instalar na mão (dll + ícones + Lua + config.ini)
 mod/workshop/       o mesmo mod empacotado para a Steam Workshop
+mod/nexus/          distribuição SEM DLL para o Nexus (janela UMG em Lua puro)
 external/  RE-UE4SS (só os headers), ImGui, fmt e a import lib gerada
 build/     cache da extração (.uasset e .json crus) — descartável
 docs/      decisões de arquitetura
@@ -63,12 +87,24 @@ Igual à do jogo (`UPalCombiMonsterParameter::FindChildCharacterID`):
 
 1. Se o par de tribos existe em `DT_PalCombiUnique` (em qualquer ordem, e
    respeitando o gênero quando a linha exige), o filhote é o dessa linha.
-2. Caso contrário, `rank alvo = floor((rankA + rankB + 1) / 2)` e vence o Pal
+2. Mesma espécie × mesma espécie → a própria espécie (auto-cruzamento).
+3. Caso contrário, `rank alvo = floor((rankA + rankB + 1) / 2)` e vence o Pal
    com o `CombiRank` mais próximo, desempatando pelo menor
    `CombiDuplicatePriority`.
 
-O ovo é `PalEgg_<elemento primário do filhote>_<tamanho do filhote>`, e os
-"Pals que podem sair desse ovo" são todos os que compartilham esse mesmo item.
+Dois conjuntos de Pals:
+
+- **espécies selecionáveis** (290): todo Pal capturável pode ser escolhido como
+  pai — inclui as lendárias/especiais (`IgnoreCombi`, como Lyleen, Jetragon,
+  Frostallion), que **só nascem de auto-cruzamento** e por isso nunca saem de
+  um cruzamento de rank;
+- **pool de resultados** (263): as espécies que podem sair de um cruzamento de
+  rank (as `IgnoreCombi` ficam de fora — regra 3).
+
+A regra 2 é o único caminho para as lendárias e garante que qualquer Pal × ele
+mesmo gera ele mesmo. O ovo é
+`PalEgg_<elemento primário do filhote>_<tamanho do filhote>`, e os "Pals que
+podem sair desse ovo" são os do pool que compartilham esse mesmo item.
 
 ## Conferência
 
@@ -99,20 +135,42 @@ powershell -ExecutionPolicy Bypass -File tools\install_mod.ps1
 ```
 
 Copia `mod/PalBreedCalc` para `Mods\` do UE4SS e habilita no `mods.txt`
-(feche o jogo antes — o `main.dll` fica em uso). Depois é só apertar **F6**.
+(feche o jogo antes — o `main.dll` fica em uso). Depois é só apertar **F6** (ou
+a tecla escolhida em `config.ini`).
 
-## Publicar na Steam Workshop
+## Distribuições — todas com a DLL
+
+Toda distribuição publicada traz a **DLL** (overlay ImGui em C++), que é a
+interface principal: rápida, leve e com as correções de estabilidade da seção
+[Interface](#interface). O pacote também inclui a janela Lua (`ui_umg.lua`)
+como **fallback automático** — se a DLL não carregar em alguma máquina, o F6
+abre a janela Lua no lugar (`uiconfig.lua` com `lua_ui = "auto"`).
 
 ```powershell
-python tools/make_thumbnail.py                                   # 525x525
-powershell -ExecutionPolicy Bypass -File tools\package_workshop.ps1
+python tools/make_thumbnail.py                                        # 525x525
+powershell -ExecutionPolicy Bypass -File tools\package_workshop.ps1   # Steam Workshop
+powershell -ExecutionPolicy Bypass -File tools\package_nexus.ps1      # Nexus (zip)
+powershell -ExecutionPolicy Bypass -File tools\package_gamepass.ps1   # Game Pass (zip)
 ```
 
-Monta `mod/workshop/PalBreedCalc` no formato que o gerenciador de mods do
-próprio Palworld publica: `Info.json` + `thumbnail.png` na raiz e uma pasta por
-alvo da `InstallRule`. O pacote traz um `enabled.txt`, então quem instalar pela
-Workshop não precisa mexer no `mods.txt`. A dependência `UE4SSExperimentalPW`
-está declarada no `Info.json`.
+Todos partem de `mod/PalBreedCalc` (DLL + `icons/*.dds` + `Scripts/*.lua`):
+
+- **Workshop**: `mod/workshop/PalBreedCalc` no formato do gerenciador de mods
+  do jogo (`Info.json` + `thumbnail.png` + `InstallRule` tipo `Lua` com alvos
+  `dlls`/`icons`/`Scripts`), com `enabled.txt` para não mexer no `mods.txt`.
+  Dependência `UE4SSExperimentalPW` declarada.
+- **Nexus**: `mod/nexus/PalBreedCalc-<versão>.zip`, extraído em `ue4ss\Mods\`.
+- **Game Pass (WinGDK)**: `mod/gamepass/PalBreedCalc-<versão>-GamePass.zip`
+  com a árvore `Pal\Binaries\WinGDK\ue4ss\Mods\PalBreedCalc` para mesclar na
+  pasta do jogo (mesmo esquema do PalMiniMap-GamePass). A mesma `main.dll` roda
+  no WinGDK (linka contra a `UE4SS.dll` por nome — símbolos iguais entre os
+  builds Win64 e WinGDK). Sem Steam não há manifesto de idioma: quem joga em
+  português troca `language = "pt-BR"` no `Scripts/uiconfig.lua`.
+
+`uiconfig.lua` decide o F6: `"auto"` (padrão — DLL quando `dlls/main.dll`
+existe, Lua caso contrário), `false` (força DLL), `true` (força Lua).
+`tools/test_ui_umg.py` cobre a janela Lua fora do jogo (18 checks) para o
+fallback continuar íntegro.
 
 O mod não precisa do jogo rodando para calcular: os dados vão compilados na
 DLL. A parte Lua é opcional e serve para conferir se um patch mexeu nos

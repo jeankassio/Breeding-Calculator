@@ -1,6 +1,7 @@
 """
 Compara o motor C++ do mod com a implementacao de referencia em Python,
-cruzando TODOS os pares possiveis (pool x pool).
+cruzando TODOS os pares possiveis (species x species) e conferindo a busca
+inversa por filhote.
 
 Requer o executavel de conferencia:
     powershell -ExecutionPolicy Bypass -File mod-cpp\\build.ps1
@@ -48,7 +49,7 @@ def main() -> int:
     # busca inversa: os mesmos cruzamentos, agrupados por filhote. Um par conta
     # uma vez so, mesmo quando as duas ordens de genero funcionam.
     forward = {(male, female): (child, rule) for male, female, child, rule, _, _ in rows}
-    ids = [p.id for p in py.pool]
+    ids = [p.id for p in py.species]
     expected: dict[str, list[tuple]] = {}
     for i, a in enumerate(ids):
         for b in ids[i:]:

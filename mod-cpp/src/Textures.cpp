@@ -121,17 +121,39 @@ namespace palbreed
         m_backend = nullptr;
     }
 
+    auto TextureCache::forget() -> void
+    {
+        // Sem chamar o backend: quem o destruiu ja liberou as texturas dele.
+        m_textures.clear();
+        m_backend = nullptr;
+    }
+
+    auto TextureCache::begin_frame() -> void
+    {
+        // Com o clipper, so os icones VISIVEIS pedem textura por frame (~20),
+        // entao este orcamento enche a tela em 1-2 frames em vez de espalhar o
+        // carregamento por dezenas de frames.
+        m_frame_budget = 16;
+    }
+
     auto TextureCache::load(const std::string& key) -> ImTextureID
     {
         if (const auto cached = m_textures.find(key); cached != m_textures.end())
         {
             return cached->second;
         }
-        m_textures[key] = 0;                 // memoriza a falha tambem
         if (m_backend == nullptr)
         {
             return 0;
         }
+        // Orcamento por frame: o que nao couber fica para o proximo frame (a
+        // falha NAO e memorizada aqui, entao a proxima chamada tenta de novo).
+        if (m_frame_budget <= 0)
+        {
+            return 0;
+        }
+        --m_frame_budget;
+        m_textures[key] = 0;                 // memoriza a falha real tambem
 
         std::ifstream file(m_icons_dir + key + ".dds", std::ios::binary);
         if (!file)
@@ -165,6 +187,13 @@ namespace palbreed
         image.block_bytes = layout.block_bytes;
         image.pixels = bytes.data() + payload_offset;
         image.size = bytes.size() - payload_offset;
+
+        // Arquivo cortado: o backend leria alem do fim do buffer. Melhor a
+        // janela ficar sem este icone.
+        if (!image.complete())
+        {
+            return 0;
+        }
 
         const ImTextureID texture = m_backend->create(image);
         m_textures[key] = texture;

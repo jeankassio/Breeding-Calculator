@@ -13,7 +13,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parent.parent
-ICONS = ROOT / "mod" / "PalBreedCalc" / "icons"
+ICONS = ROOT / "build" / "icons"
 OUT = ROOT / "mod" / "workshop" / "PalBreedCalc" / "thumbnail.png"
 
 SIZE = 525
