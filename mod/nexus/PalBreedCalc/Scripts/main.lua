@@ -51,6 +51,9 @@ local function buildDb()
     return {
         pals = pals,
         pool = pool,
+        -- resultados possiveis de um cruzamento por rank (sem os filhos de
+        -- combinacao unica, que so nascem da combinacao deles)
+        rankPool = breeding.buildRankPool(pals, pool, baseData.unique),
         species = species,
         speciesByTribe = speciesByTribe,
         uniqueIndex = breeding.indexUnique(baseData.unique),

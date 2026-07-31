@@ -38,14 +38,34 @@ def _rank(p: dict) -> tuple:
     return (p["id"].lower() != p["tribe"].lower(), p["is_boss"], -(p["zukan"] or -1))
 
 
-def build_pool(pals: list[dict]) -> set[str]:
-    """Resultados de rank: uma linha por tribo (exclui IgnoreCombi) — a mesma
-    regra de tools/breeding.py."""
-    by_tribe: dict[str, list[dict]] = {}
+def canonical(pals: list[dict]) -> dict[str, dict]:
+    """A linha que representa cada tribo (a normal; alfa e ultimo recurso)."""
+    canon: dict[str, dict] = {}
     for p in pals:
-        if not p["ignore_combi"] and p["tribe"]:
-            by_tribe.setdefault(p["tribe"], []).append(p)
-    return {sorted(rows, key=_rank)[0]["id"] for rows in by_tribe.values()}
+        if not p["tribe"]:
+            continue
+        cur = canon.get(p["tribe"])
+        if cur is None or _rank(p) < _rank(cur):
+            canon[p["tribe"]] = p
+    return canon
+
+
+def build_pool(pals: list[dict]) -> set[str]:
+    """Quem compartilha um item de ovo — a mesma regra de tools/breeding.py.
+
+    Quem manda no IgnoreCombi e a linha CANONICA da tribo, nao "qualquer linha
+    que nao seja IgnoreCombi": tres tribos (MimicDog/Mimog, ElecLion/Boltmane,
+    Monkey_Ice) tem a linha normal com IgnoreCombi=true e a do alfa com false,
+    e filtrando antes o alfa virava o representante da especie."""
+    return {c["id"] for c in canonical(pals).values() if not c["ignore_combi"]}
+
+
+def build_unique_children(pals: list[dict], unique: list[dict]) -> set[str]:
+    """Tribos que so nascem de uma combinacao unica. Elas continuam no pool (a
+    lista "sai deste mesmo ovo" conta com elas), mas ficam de fora da busca por
+    rank -- e o que impede um par comum de "gerar" Jormuntide Ignis."""
+    by_id = {p["id"]: p for p in pals}
+    return {by_id[u["child"]]["tribe"] for u in unique if u["child"] in by_id}
 
 
 def build_species(pals: list[dict], pool: set[str]) -> set[str]:
@@ -53,13 +73,16 @@ def build_species(pals: list[dict], pool: set[str]) -> set[str]:
     tribo fora do pool, so especies reais). Mesma regra de breeding.py."""
     species = set(pool)
     pool_tribes = {p["tribe"] for p in pals if p["id"] in pool}
-    by_tribe: dict[str, list[dict]] = {}
-    for p in pals:
-        if p["tribe"] and p["tribe"] not in pool_tribes:
-            by_tribe.setdefault(p["tribe"], []).append(p)
-    for rows in by_tribe.values():
-        best = sorted(rows, key=_rank)[0]
-        if best["zukan"] and best["zukan"] > 0 and not best["is_boss"]:
+    for tribe, best in canonical(pals).items():
+        if tribe in pool_tribes:
+            continue
+        # So especies capturaveis de verdade: numero no Paldex, nao-alfa e com
+        # item de ovo. O zukan/alfa deixa de fora os Pals nao lancados que
+        # ficam na DT (Boltmane, Monkey_Ice); o ovo exclui Astralym (#204), o
+        # unico sem ElementType1 e sem ovo -- chefe final, sem spawn, nao entra
+        # na fazenda de reproducao.
+        if (best["zukan"] and best["zukan"] > 0 and not best["is_boss"]
+                and best["egg"]):
             species.add(best["id"])
     return species
 
@@ -71,6 +94,7 @@ def main() -> int:
     unique = json.loads((data / "combi_unique.json").read_text(encoding="utf-8"))
     pool = build_pool(pals)
     species = build_species(pals, pool)
+    unique_children = build_unique_children(pals, unique)
 
     lines = [
         "// GERADO POR tools/gen_cpp_data.py -- NAO EDITE A MAO",
@@ -81,12 +105,13 @@ def main() -> int:
         "    const PalInfo kPals[] = {",
     ]
     for p in pals:
-        lines.append("        {%s, %s, %s, %s, %d, %d, %d, %s, %s, %s, %d, %s, %s}," % (
+        lines.append("        {%s, %s, %s, %s, %d, %d, %d, %s, %s, %s, %d, %s, %s, %s}," % (
             c_string(p["id"]), c_string(p["names"]["pt-BR"]), c_string(p["names"]["en"]),
             c_string(p["tribe"]), p["zukan"] or -1, p["combi_rank"], p["combi_priority"],
             c_string(p["element1"]), c_string(p["size"]), c_string(p["egg"]),
             p["male_probability"], "true" if p["id"] in pool else "false",
             "true" if p["id"] in species else "false",
+            "true" if p["tribe"] in unique_children else "false",
         ))
     lines += ["    };",
               f"    const std::size_t kPalCount = {len(pals)};", "",

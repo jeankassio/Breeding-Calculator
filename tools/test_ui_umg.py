@@ -133,6 +133,7 @@ def main() -> int:
         local db = {
             pals = data.pals,
             pool = pool,
+            rankPool = breeding.buildRankPool(data.pals, pool, data.unique),
             species = species,
             speciesByTribe = speciesByTribe,
             uniqueIndex = breeding.indexUnique(data.unique),
@@ -168,7 +169,7 @@ def main() -> int:
         out.poolCell = nil
         for i = 1, 48 do
             local t = MOCK.widgets["PoolName" .. i]
-            if t and t.__text == "Tanzee" then out.poolCell = t.__text end
+            if t and t.__text == "Daedream" then out.poolCell = t.__text end
         end
 
         -- filtro
@@ -221,13 +222,19 @@ def main() -> int:
         "janela construida": result["built"] is True,
         "no viewport": result["inViewport"] is True,
         "input mode UI ao abrir": result["inputMode"] == "ui",
-        "290 linhas na lista (inclui lendarias)": result["maleRows"] == 290,
+        # 287 = os 204 do Paldex + 84 variantes - Astralym (sem ovo, nao entra
+        # na fazenda). Antes eram 290: entravam tambem Boltmane e Monkey_Ice,
+        # que nao existem no jogo 1.0, pela linha do alfa.
+        "287 linhas na lista (inclui lendarias)": result["maleRows"] == 287,
         "mensagem inicial": "Pick a male" in str(result["resultEmpty"]),
         "icones progressivos": result["iconsProgressive"] is True,
-        "clique seleciona e calcula": "Tanzee" in str(result["resultPair"]),
+        # Lamball x Cattiva = Daedream (conferido com o jogo -- ver
+        # KNOWN_COMBOS em validate.py; antes o mod dizia Tanzee, por causa do
+        # desempate invertido)
+        "clique seleciona e calcula": "Daedream" in str(result["resultPair"]),
         "resumo do macho": "Lamball" in str(result["maleSummary"]),
-        "titulo da grade (8)": "(8)" in str(result["poolTitle"]),
-        "filhote presente na grade": str(result["poolCell"] or "") == "Tanzee",
+        "titulo da grade (11)": "(11)" in str(result["poolTitle"]),
+        "filhote presente na grade": str(result["poolCell"] or "") == "Daedream",
         "filtro reduz a lista": int(result["filtered"]) == 1,
         "selecao exclusiva": result["exclusive"] is False and int(result["checkedCount"]) == 1,
         "aba reversa visivel": result["reverseShown"] is True,

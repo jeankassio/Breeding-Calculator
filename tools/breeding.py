@@ -9,13 +9,20 @@ Espelha o que o jogo faz em UPalCombiMonsterParameter::FindChildCharacterID:
      nunca saem de um cruzamento de rank;
   3. senao, rank alvo = floor((rankA + rankB + 1) / 2) e escolhe-se o Pal com
      o CombiRank mais proximo (UPalDatabaseCharacterParameter::FindNearestCombiRank),
-     desempatando pelo menor CombiDuplicatePriority.
+     desempatando pelo MAIOR CombiDuplicatePriority.
 
-Dois conjuntos:
+O desempate importa muito: quase todo CombiRank e multiplo de 10, entao metade
+dos pares cai exatamente no meio de dois ranks vizinhos e e o desempate que
+decide. Que ganha o MAIOR e visivel nos dados: as nove variantes que so saem de
+combinacao unica (Penking Lux, Fuack Ignis, Azurobe Cryst, ...) tem prioridade
+571-581 em vez do padrao rank*100 -- ou seja, o jogo as fez perder todo empate.
+
+Tres conjuntos:
   * species: tudo que pode ser escolhido como PAI (inclui as IgnoreCombi, que
     sao criaveis por auto-cruzamento) -- e a lista da UI;
-  * pool: os resultados possiveis de um cruzamento de rank (species menos as
-    IgnoreCombi).
+  * pool: quem compartilha um item de ovo (a lista "sai deste mesmo ovo");
+  * rank_pool: os resultados possiveis de um cruzamento de rank -- o pool menos
+    os filhos de combinacao unica, que SO saem da combinacao delas.
 
 O mod em Lua repete exatamente esta logica; este arquivo e a referencia usada
 pelos testes e pode ser usado direto na linha de comando:
@@ -82,8 +89,16 @@ class Breeding:
 
         # combinacoes unicas indexadas pelo par de tribos (sem ordem)
         self.unique: dict[frozenset, list[dict]] = {}
-        for u in json.loads((data_dir / "combi_unique.json").read_text(encoding="utf-8")):
+        unique_rows = json.loads((data_dir / "combi_unique.json").read_text(encoding="utf-8"))
+        for u in unique_rows:
             self.unique.setdefault(frozenset((u["parent_a"], u["parent_b"])), []).append(u)
+
+        # Quem e filho de uma combinacao unica so nasce dessa combinacao: nunca
+        # sai de um cruzamento por rank. Sem isso o calculo devolvia variantes
+        # (Jormuntide Ignis, Penking Lux, ...) em pares comuns.
+        self.unique_children = {self.pals[u["child"]].tribe for u in unique_rows
+                                if u["child"] in self.pals}
+        self.rank_pool = [p for p in self.pool if p.tribe not in self.unique_children]
 
         # todo Pal que nasce de um mesmo item de ovo
         self.by_egg: dict[str, list[Pal]] = {}
@@ -97,24 +112,38 @@ class Breeding:
         # senao a que aparece no Paldex; alfa e ultimo recurso.
         return (p.id.lower() != p.tribe.lower(), p.is_boss, -(p.zukan or -1))
 
-    def _build_pool(self) -> list[Pal]:
-        by_tribe: dict[str, list[Pal]] = {}
+    def _canonical(self) -> dict[str, Pal]:
+        """A linha que representa cada tribo (a normal; alfa e ultimo recurso)."""
+        canon: dict[str, Pal] = {}
         for p in self.pals.values():
-            if not p.ignore_combi:
-                by_tribe.setdefault(p.tribe, []).append(p)
-        return [sorted(rows, key=self._rank_row)[0] for rows in by_tribe.values()]
+            if not p.tribe:
+                continue
+            cur = canon.get(p.tribe)
+            if cur is None or self._rank_row(p) < self._rank_row(cur):
+                canon[p.tribe] = p
+        return canon
+
+    def _build_pool(self) -> list[Pal]:
+        # Quem manda no IgnoreCombi e a linha CANONICA da tribo, nao "qualquer
+        # linha que nao seja IgnoreCombi". Tres tribos (MimicDog/Mimog,
+        # ElecLion/Boltmane, Monkey_Ice) tem a linha normal com IgnoreCombi=true
+        # e a do alfa com false; filtrando antes, o alfa virava o representante
+        # da especie -- Mimog entrava como resultado de cruzamento por rank e
+        # ainda aparecia na lista sem o numero #144 do Paldex.
+        return [c for c in self._canonical().values() if not c.ignore_combi]
 
     def _build_species(self) -> list[Pal]:
         species = list(self.pool)
         pool_tribes = {p.tribe for p in self.pool}
-        by_tribe: dict[str, list[Pal]] = {}
-        for p in self.pals.values():
-            if p.tribe and p.tribe not in pool_tribes:
-                by_tribe.setdefault(p.tribe, []).append(p)
-        for rows in by_tribe.values():
-            best = sorted(rows, key=self._rank_row)[0]
-            # so especies capturaveis de verdade (numero no Paldex, nao-alfa)
-            if best.zukan and best.zukan > 0 and not best.is_boss:
+        for tribe, best in self._canonical().items():
+            if tribe in pool_tribes:
+                continue
+            # So especies capturaveis de verdade: numero no Paldex, nao-alfa e
+            # com item de ovo. O ovo e o que exclui Astralym (#204), o unico
+            # Pal do jogo sem ElementType1 e sem ovo -- ele e o chefe final,
+            # nao tem spawn e nao entra na fazenda de reproducao. Sem esse
+            # teste, a busca reversa oferecia pares com um pai impossivel.
+            if best.zukan and best.zukan > 0 and not best.is_boss and best.egg:
                 species.append(best)
         return species
 
@@ -133,8 +162,10 @@ class Breeding:
         return None
 
     def nearest(self, target_rank: int) -> Pal:
-        return min(self.pool,
-                   key=lambda p: (abs(p.combi_rank - target_rank), p.combi_priority))
+        # rank mais proximo; empate -> MAIOR CombiDuplicatePriority; empate
+        # ainda -> id, so para os tres motores darem a mesma resposta.
+        return min(self.rank_pool,
+                   key=lambda p: (abs(p.combi_rank - target_rank), -p.combi_priority, p.id))
 
     def breed(self, a: str, b: str, gender_a: str = "Male", gender_b: str = "Female") -> dict:
         """a/b sao ids de linha (ex. 'Lamball', 'BOSS_Anubis')."""

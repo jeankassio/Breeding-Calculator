@@ -118,13 +118,84 @@ o pool antigo servia de lista *e* de resultado ao mesmo tempo e excluía tudo
 que era `IgnoreCombi`. O flag `selectable` é pré-calculado por
 `gen_cpp_data.py` (o C++ não recomputa nada em runtime).
 
+## O desempate do rank (a causa dos resultados errados)
+
+Relataram cruzamentos que davam outro Pal no jogo. Eram duas regras erradas, e
+as duas ficavam invisíveis para os testes existentes — porque os três motores
+concordavam entre si, todos errados do mesmo jeito.
+
+**1. O desempate estava invertido.** Quando dois Pals ficam à mesma distância do
+rank alvo, vence o **maior** `CombiDuplicatePriority`, não o menor. Isso não é
+um caso raro: quase todo `CombiRank` é múltiplo de 10, então sempre que os pais
+têm paridade diferente o alvo cai exatamente no meio de dois ranks vizinhos —
+**45,9% dos pares**. A prova está nos próprios dados: `CombiDuplicatePriority`
+é `CombiRank × 100` para 254 dos 263 Pals do pool, e as **nove exceções** têm
+valores minúsculos (571 a 581):
+
+```
+BlueDragon_Ice        Azurobe Cryst      rank 1220   priority   578
+CaptainPenguin_Black  Penking Lux        rank 1850   priority   573
+BluePlatypus_Fire     Fuack Ignis        rank 2300   priority   575
+...
+```
+
+Todas são variantes que só saem de combinação única. Prioridade mínima é o jeito
+de o jogo dizer "este perde qualquer empate" — o que só faz sentido se o maior
+vence. Com a regra invertida, eram justamente essas nove que ganhavam todo
+empate.
+
+**2. Filho de combinação única só nasce daquela combinação.** O motor não
+excluía esses Pals da busca por rank, então pares comuns "geravam" Jormuntide
+Ignis, Penking Lux e afins. O pool de rank cai de 263 para 184 espécies.
+
+A conferência agora tem uma âncora externa: `KNOWN_COMBOS` em
+`tools/validate.py` traz 15 cruzamentos com resultado documentado pelo Game8.
+Foram eles que decidiram a questão — as quatro combinações possíveis das duas
+regras acertavam 6, 10, 12 e 15 de 15. Só a última fecha. Uma segunda conferência
+contra o palbreeding.com bateu 20/20 nos pares de Anubis.
+
+## Quem entra na lista de espécies
+
+A revisão contra o palbreeding.com (299 Pals) mostrou que a lista tinha três
+Pals a mais e um com o número errado. Duas correções, as duas vindas dos dados:
+
+**A linha canônica da tribo é escolhida antes de olhar o `IgnoreCombi`.** O
+código filtrava `IgnoreCombi` primeiro e só depois escolhia a linha
+representante. Em três tribos — Mimog, Boltmane e Monkey_Ice — a linha normal
+tem `IgnoreCombi=true` e a do **alfa** tem `false`, então o alfa sobrevivia ao
+filtro e virava o representante da espécie. Consequências: Mimog aparecia na
+lista sem o `#144` (a linha do alfa não tem `ZukanIndex`) e entrava como
+resultado de cruzamento por rank, coisa que a linha normal proíbe.
+
+**Sem item de ovo, não entra na fazenda.** Astralym (#204) é o único Pal do jogo
+com `ElementType1 = None` e sem `PalEgg_*` — é o chefe final, não tem spawn nem
+alfa. Na `DT_PalMonsterParameter` **não existe** campo que o separe de
+Panthalus (`IgnoreCombi`, `IsBoss`, `IsRaidBoss`, `IsTowerBoss` e
+`CaptureRateCorrect` são idênticos nos dois), então a ausência do ovo é o único
+sinal disponível — e é ele que o motor usa, em vez de um nome fixo no código.
+
+O efeito é verificável: a lista sai de 290 para 287 (204 do Paldex + 84
+variantes − Astralym) e a busca reversa de Anubis sai de 236 para **234**, o
+número exato do palbreeding.com. Boltmane, aliás, nunca esteve no jogo — é um
+Pal anunciado que não entrou nem no acesso antecipado nem na 1.0.
+
+O `pool` continua servindo à lista "sai deste mesmo ovo" (um Pal de combinação
+única *nasce* de um ovo daquele tipo); quem encolheu foi só o conjunto que a
+regra 3 pode devolver, o `rank_pool`.
+
 ## Três implementações da mesma regra
 
 `tools/breeding.py` (referência), `mod/PalBreedCalc/Scripts/breeding.lua` e
 `mod-cpp/src/Breeding.cpp`. Parece redundante, mas é o que garante a
-conferência automática: `validate_cpp.py` roda o motor C++ em todos os 69.169
+conferência automática: `validate_cpp.py` roda o motor C++ em todos os 84.100
 pares possíveis e compara com o Python; `validate_lua.py` faz o mesmo com o
 Lua. Qualquer divergência aparece antes de virar bug em jogo.
+
+Com uma ressalva que o bug do desempate deixou clara: essa conferência prova que
+os três **concordam**, não que estejam **certos**. Foi por isso que uma regra
+errada sobreviveu a 84.100 comparações. O que fecha essa brecha é a âncora
+externa (`KNOWN_COMBOS`), e é ela que precisa crescer quando surgir um relato de
+resultado divergente — reproduza o caso, confirme no jogo, e ele vira teste.
 
 ## Idioma
 

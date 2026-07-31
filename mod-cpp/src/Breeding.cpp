@@ -53,10 +53,20 @@ namespace palbreed
             return std::strcmp(a->id, b->id) < 0;
         });
 
+        // Filhos de combinacao unica continuam no pool (para a lista do ovo),
+        // mas nunca podem sair de um cruzamento por rank.
+        for (const auto* pal : m_pool)
+        {
+            if (!pal->unique_only)
+            {
+                m_rank_pool.push_back(pal);
+            }
+        }
+
         // Tabela rank -> filhote: o rank alvo nunca passa do maior CombiRank
         // do pool, entao ela cobre qualquer par.
         int max_rank = 0;
-        for (const auto* pal : m_pool)
+        for (const auto* pal : m_rank_pool)
         {
             max_rank = (std::max)(max_rank, pal->combi_rank);
         }
@@ -157,11 +167,24 @@ namespace palbreed
     {
         const PalInfo* best = nullptr;
         int best_distance = 0;
-        for (const auto* pal : m_pool)
+        for (const auto* pal : m_rank_pool)
         {
             const int distance = std::abs(pal->combi_rank - target_rank);
-            if (best == nullptr || distance < best_distance
-                || (distance == best_distance && pal->combi_priority < best->combi_priority))
+            if (best == nullptr || distance < best_distance)
+            {
+                best = pal;
+                best_distance = distance;
+                continue;
+            }
+            if (distance != best_distance)
+            {
+                continue;
+            }
+            // Empate no rank: vence o MAIOR CombiDuplicatePriority. O id so
+            // entra para os motores C++, Lua e Python darem a mesma resposta.
+            if (pal->combi_priority > best->combi_priority
+                || (pal->combi_priority == best->combi_priority
+                    && std::strcmp(pal->id, best->id) < 0))
             {
                 best = pal;
                 best_distance = distance;

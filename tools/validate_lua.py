@@ -30,6 +30,7 @@ def lua_engine():
         local db = {
             pals = data.pals,
             pool = pool,
+            rankPool = breeding.buildRankPool(data.pals, pool, data.unique),
             species = species,
             speciesByTribe = speciesByTribe,
             uniqueIndex = breeding.indexUnique(data.unique),

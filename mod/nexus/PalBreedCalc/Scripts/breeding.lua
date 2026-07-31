@@ -17,12 +17,13 @@ local function canonicalScore(pal)
     return sameName + (pal.is_boss and 1 or 0)
 end
 
--- Uma linha por tribo: a DT tem varias linhas para a mesma especie (BOSS_,
--- Quest_, ...) todas com o mesmo CombiRank, mas so a normal pode nascer.
-function M.buildPool(pals)
+-- A linha que representa cada tribo: a DT tem varias linhas para a mesma
+-- especie (BOSS_, Quest_, ...) todas com o mesmo CombiRank, mas so a normal
+-- pode nascer.
+local function canonicalByTribe(pals)
     local best = {}
     for _, pal in pairs(pals) do
-        if not pal.ignore_combi and pal.tribe then
+        if pal.tribe then
             local cur = best[pal.tribe]
             if cur == nil then
                 best[pal.tribe] = pal
@@ -34,8 +35,18 @@ function M.buildPool(pals)
             end
         end
     end
+    return best
+end
+
+-- Quem manda no IgnoreCombi e a linha CANONICA da tribo, nao "qualquer linha
+-- que nao seja IgnoreCombi": tres tribos (MimicDog/Mimog, ElecLion/Boltmane,
+-- Monkey_Ice) tem a linha normal com IgnoreCombi=true e a do alfa com false,
+-- e filtrando antes o alfa virava o representante da especie.
+function M.buildPool(pals)
     local pool = {}
-    for _, pal in pairs(best) do pool[#pool + 1] = pal end
+    for _, pal in pairs(canonicalByTribe(pals)) do
+        if not pal.ignore_combi then pool[#pool + 1] = pal end
+    end
     table.sort(pool, function(x, y) return x.id < y.id end)
     return pool
 end
@@ -51,28 +62,35 @@ function M.buildSpecies(pals, pool)
         byTribe[p.tribe] = p
         poolTribes[p.tribe] = true
     end
-    -- melhor linha por tribo fora do pool (IgnoreCombi): so especies reais
-    local best = {}
-    for _, pal in pairs(pals) do
-        if pal.tribe and not poolTribes[pal.tribe]
-           and (pal.zukan or -1) > 0 and not pal.is_boss then
-            local cur = best[pal.tribe]
-            if cur == nil then
-                best[pal.tribe] = pal
-            else
-                local a, b = canonicalScore(pal), canonicalScore(cur)
-                if a < b or (a == b and (pal.zukan or -1) > (cur.zukan or -1)) then
-                    best[pal.tribe] = pal
-                end
-            end
+    -- Linha canonica das tribos fora do pool (IgnoreCombi): so especies reais.
+    -- O teste de zukan/alfa deixa de fora os Pals nao lancados que ficam na DT
+    -- (Boltmane, Monkey_Ice, ...); o do ovo exclui Astralym (#204), o unico
+    -- sem elemento e sem ovo -- chefe final, sem spawn, nao entra na fazenda.
+    for tribe, pal in pairs(canonicalByTribe(pals)) do
+        if not poolTribes[tribe] and (pal.zukan or -1) > 0 and not pal.is_boss
+           and pal.egg then
+            species[#species + 1] = pal
+            byTribe[pal.tribe] = pal
         end
-    end
-    for _, pal in pairs(best) do
-        species[#species + 1] = pal
-        byTribe[pal.tribe] = pal
     end
     table.sort(species, function(x, y) return x.id < y.id end)
     return species, byTribe
+end
+
+-- Candidatos a filho de um cruzamento por RANK: o pool menos quem e filho de
+-- uma combinacao unica -- esses so nascem da combinacao deles (variantes como
+-- Jormuntide Ignis e Penking Lux nunca saem de um par comum).
+function M.buildRankPool(pals, pool, unique)
+    local uniqueChildren = {}
+    for _, u in ipairs(unique) do
+        local c = pals[u.child]
+        if c and c.tribe then uniqueChildren[c.tribe] = true end
+    end
+    local out = {}
+    for _, p in ipairs(pool) do
+        if not uniqueChildren[p.tribe] then out[#out + 1] = p end
+    end
+    return out
 end
 
 -- Indexa as combinacoes unicas pelo par de tribos (sem ordem).
@@ -109,12 +127,19 @@ local function uniqueChild(idx, a, b, genderA, genderB)
 end
 
 -- UPalDatabaseCharacterParameter::FindNearestCombiRank
+--
+-- Empate no rank -> vence o MAIOR CombiDuplicatePriority. Isso e o que decide
+-- metade dos cruzamentos: os CombiRank sao multiplos de 10, entao o alvo cai
+-- exatamente no meio de dois ranks vizinhos sempre que os pais estao em
+-- "paridade" diferente.
 local function nearest(pool, target)
-    local best, bestDist, bestPrio = nil, math.huge, math.huge
+    local best, bestDist, bestPrio = nil, math.huge, -math.huge
     for _, pal in ipairs(pool) do
         local dist = math.abs((pal.combi_rank or 0) - target)
         local prio = pal.combi_priority or 0
-        if dist < bestDist or (dist == bestDist and prio < bestPrio) then
+        if dist < bestDist
+           or (dist == bestDist and prio > bestPrio)
+           or (dist == bestDist and prio == bestPrio and best and pal.id < best.id) then
             best, bestDist, bestPrio = pal, dist, prio
         end
     end
@@ -126,12 +151,13 @@ end
 -- avalia ~70 mil pares).
 local function rankTable(db)
     if db.byRank == nil then
+        local src = db.rankPool or db.pool
         local maxRank = 0
-        for _, p in ipairs(db.pool) do
+        for _, p in ipairs(src) do
             if (p.combi_rank or 0) > maxRank then maxRank = p.combi_rank end
         end
         local t = {}
-        for r = 0, maxRank do t[r] = nearest(db.pool, r) end
+        for r = 0, maxRank do t[r] = nearest(src, r) end
         db.byRank = t
         db.maxRank = maxRank
     end
@@ -141,7 +167,7 @@ end
 local function nearestFast(db, target)
     local t = rankTable(db)
     if target >= 0 and target <= db.maxRank then return t[target] end
-    return nearest(db.pool, target)
+    return nearest(db.rankPool or db.pool, target)
 end
 
 -- db = { pals = {...}, pool = {...}, uniqueIndex = {...} }

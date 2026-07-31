@@ -89,17 +89,41 @@ Igual à do jogo (`UPalCombiMonsterParameter::FindChildCharacterID`):
    respeitando o gênero quando a linha exige), o filhote é o dessa linha.
 2. Mesma espécie × mesma espécie → a própria espécie (auto-cruzamento).
 3. Caso contrário, `rank alvo = floor((rankA + rankB + 1) / 2)` e vence o Pal
-   com o `CombiRank` mais próximo, desempatando pelo menor
-   `CombiDuplicatePriority`.
+   com o `CombiRank` mais próximo, desempatando pelo **maior**
+   `CombiDuplicatePriority`. Quem é filho de uma combinação única fica **fora**
+   dessa busca: só nasce da combinação dele.
 
-Dois conjuntos de Pals:
+O desempate não é detalhe: quase todo `CombiRank` é múltiplo de 10, então
+sempre que os pais têm "paridade" diferente o alvo cai exatamente no meio de
+dois ranks vizinhos — **cerca de metade dos pares**. Que vence o maior está nos
+próprios dados: as nove variantes que só saem de combinação única (Penking Lux,
+Fuack Ignis, Azurobe Cryst, …) têm prioridade 571–581 em vez do padrão
+`rank × 100`, ou seja, o jogo as fez perder todo empate.
 
-- **espécies selecionáveis** (290): todo Pal capturável pode ser escolhido como
+Três conjuntos de Pals:
+
+- **espécies selecionáveis** (287): todo Pal capturável pode ser escolhido como
   pai — inclui as lendárias/especiais (`IgnoreCombi`, como Lyleen, Jetragon,
   Frostallion), que **só nascem de auto-cruzamento** e por isso nunca saem de
   um cruzamento de rank;
-- **pool de resultados** (263): as espécies que podem sair de um cruzamento de
-  rank (as `IgnoreCombi` ficam de fora — regra 3).
+- **pool do ovo** (260): quem compartilha um item de ovo — é a lista "sai deste
+  mesmo ovo" (as `IgnoreCombi` ficam de fora);
+- **pool de rank** (183): o pool do ovo menos os filhos de combinação única. É
+  o único conjunto que a regra 3 pode devolver.
+
+Os 287 são os 204 números do Paldex + 84 variantes − Astralym (#204). Três
+Pals ficam de fora por motivos que vêm dos dados, não de exceções no código:
+
+| fora da lista | por quê |
+|---|---|
+| Astralym (#204) | único Pal sem `ElementType1` e **sem item de ovo** — é o chefe final, não tem spawn e não entra na fazenda de reprodução |
+| Boltmane, Monkey_Ice | sem número de Paldex: são Pals **não lançados** que continuam na DataTable |
+
+A linha que representa cada tribo é escolhida **antes** de olhar o `IgnoreCombi`.
+Três tribos (Mimog, Boltmane, Monkey_Ice) têm a linha normal com
+`IgnoreCombi=true` e a do alfa com `false`; filtrando antes, o alfa virava o
+representante da espécie — era assim que Mimog aparecia na lista sem o **#144**
+e ainda entrava como resultado de cruzamento por rank.
 
 A regra 2 é o único caminho para as lendárias e garante que qualquer Pal × ele
 mesmo gera ele mesmo. O ovo é
@@ -109,16 +133,23 @@ podem sair desse ovo" são os do pool que compartilham esse mesmo item.
 ## Conferência
 
 ```powershell
-python tools/validate.py       # invariantes: auto-cruzamento, combinações únicas, ovos
+python tools/validate.py       # invariantes + combos e contagens conferidos com o jogo
 python tools/validate_lua.py   # roda o Lua do mod e compara com o Python
 python tools/validate_cpp.py   # roda o motor C++ em TODOS os pares e compara
 python tools/breeding.py Lamball Cattiva
 ```
 
-Estado atual: 263 espécies no pool, 258/258 combinações únicas reproduzidas,
-263/263 auto-cruzamentos corretos, 69.169/69.169 cruzamentos idênticos entre o
-C++ do mod e o Python de referência, e 263/263 buscas inversas conferindo com
-os mesmos cruzamentos agrupados por filhote.
+Estado atual: 260/260 auto-cruzamentos corretos, 258/258 combinações únicas
+reproduzidas, 82.369/82.369 cruzamentos idênticos entre o C++ do mod e o Python
+de referência, 287/287 buscas inversas conferindo com os mesmos cruzamentos
+agrupados por filhote, **15/15 combos conferidos contra o jogo** e **234 pares
+para Anubis**, o mesmo número do palbreeding.com.
+
+Essas três âncoras externas (`KNOWN_COMBOS`, `EXPECTED_SPECIES` e
+`ANUBIS_PAIRS`, em `tools/validate.py`) existem porque comparar os três motores
+entre si prova que eles **concordam**, não que estejam **certos** — foi assim
+que uma regra de desempate errada sobreviveu a 84 mil comparações. Depois de um
+patch do jogo esses números mudam: reconfira nas fontes antes de atualizá-los.
 
 Para ajustar o visual sem abrir o jogo, o `preview.exe` sobe um D3D11 próprio,
 desenha exatamente a mesma janela e salva um BMP:

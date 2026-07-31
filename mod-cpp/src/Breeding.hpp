@@ -6,7 +6,13 @@
 //   1. combinacao unica (DT_PalCombiUnique), em qualquer ordem de pais e
 //      respeitando o genero quando a linha exige um;
 //   2. senao, rank alvo = (rankA + rankB + 1) / 2 e vence o CombiRank mais
-//      proximo, desempatando pelo menor CombiDuplicatePriority.
+//      proximo, desempatando pelo MAIOR CombiDuplicatePriority.
+//
+// O desempate decide metade dos cruzamentos: os CombiRank sao multiplos de 10,
+// entao o alvo cai exatamente no meio de dois ranks vizinhos sempre que os pais
+// tem paridade diferente. Que vence o MAIOR esta nos proprios dados -- as nove
+// variantes que so saem de combinacao unica tem prioridade 571-581 em vez do
+// padrao rank*100, ou seja, o jogo as fez perder todo empate.
 //
 #include <string>
 #include <string_view>
@@ -59,7 +65,8 @@ namespace palbreed
         // Caminho inverso: todos os pares que geram este filhote.
         auto pairs_for(const PalInfo& child) const -> std::vector<ParentPair>;
 
-        // Resultados possiveis de um cruzamento de rank (exclui IgnoreCombi).
+        // Quem compartilha um item de ovo (exclui IgnoreCombi). E a lista
+        // "sai deste mesmo ovo" da janela.
         auto pool() const -> const std::vector<const PalInfo*>&
         {
             return m_pool;
@@ -83,6 +90,8 @@ namespace palbreed
         auto nearest(int target_rank) const -> const PalInfo*;
 
         std::vector<const PalInfo*> m_pool{};
+        // Candidatos de um cruzamento por rank: o pool menos os `unique_only`.
+        std::vector<const PalInfo*> m_rank_pool{};
         std::vector<const PalInfo*> m_species{};
         // tribo -> especie canonica (auto-cruzamento gera ela mesma)
         std::unordered_map<std::string_view, const PalInfo*> m_species_by_tribe{};
