@@ -1,3 +1,4 @@
+[![Somora](https://somora.media/assets/somora-github-en.png)](https://somora.media)
 # Breeding Calculator — mod de Palworld
 
 Calculadora de reprodução, aberta com **F6** dentro do jogo (DirectX 11 ou 12),
